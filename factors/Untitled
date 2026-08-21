@@ -1,0 +1,11 @@
+# Definition of Momentum Factor
+# Lookback at 45 days and count how many daily returns are positive
+import pandas as pd
+from pathlib import Path
+
+
+def load_price_data() -> pd.DataFrame:
+    path = Path(__file__).resolve().parents[1] / "data" / "raw" / "price_data.csv"
+    prices = pd.read_csv(path, index_col=0, parse_dates=True)
+    prices.index.name = "Date"
+    return prices
