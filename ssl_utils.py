@@ -12,6 +12,11 @@ from config import ROOT
 def windows_ca_bundle() -> str:
     bundle = ROOT / "data" / "windows-ca-bundle.pem"
     bundle.parent.mkdir(parents=True, exist_ok=True)
+    # Reuse existing bundle if SSL env already points at it (avoids Windows
+    # Errno 22 when curl/yfinance still has the PEM open after first setup).
+    if bundle.is_file() and bundle.stat().st_size > 0:
+        if os.environ.get("CURL_CA_BUNDLE") == str(bundle):
+            return str(bundle)
     pems: list[str] = []
     for store in ("CA", "ROOT"):
         try:
@@ -25,7 +30,12 @@ def windows_ca_bundle() -> str:
                 continue
     if not pems:
         raise RuntimeError("Could not export Windows certificates")
-    bundle.write_text("".join(pems), encoding="ascii")
+    try:
+        bundle.write_text("".join(pems), encoding="ascii")
+    except OSError:
+        if bundle.is_file() and bundle.stat().st_size > 0:
+            return str(bundle)
+        raise
     return str(bundle)
 
 
