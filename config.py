@@ -1,5 +1,5 @@
 """Central settings for the quant-trading pipeline.
-I am trying to see whether this can commit to github
+I am trying to see whether this can commit to github        
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ INITIAL_CAPITAL = 100_000.0
 MAX_SECTOR_WEIGHT = 1.0
 TOP_N_PER_SECTOR = 3
 MOMENTUM_WEIGHT = 0.4
-VALUE_WEIGHT = 0.2
-VOLATILITY_WEIGHT = 0.4
+VALUE_WEIGHT = 0.4
+VOLATILITY_WEIGHT = 0.2
 COST_RATE = 0.000735  # 7.35 bps
 US_UNIVERSE_SIZE = 100
 
