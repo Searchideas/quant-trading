@@ -14,6 +14,7 @@ def load_strategy_data(market: str | None = None) -> dict[str, pd.DataFrame | pd
 
     return {
         "price_data": pd.read_csv(raw_dir / "price_data.csv", index_col=0, parse_dates=True),
+        "dividend_data": pd.read_csv(raw_dir / "dividend_data.csv", index_col=0, parse_dates=True),
         "categorizations": categorizations,
         "factors_combined": pd.read_csv(
             processed_dir / "factors_combined.csv", index_col=0, parse_dates=True
@@ -28,21 +29,26 @@ def load_strategy_data(market: str | None = None) -> dict[str, pd.DataFrame | pd
             processed_dir / "sector_volatility.csv", index_col=0, parse_dates=True
         ),
         "sector_market_cap": sector_market_cap,
+        "sector_dividend": pd.read_csv(
+            processed_dir / "sector_dividend.csv", index_col=0, parse_dates=True
+        ),
     }
 
 
 def normalize_factors(
-    factors_combined: pd.DataFrame,
-    categorizations: pd.DataFrame,
-    sector_value: pd.DataFrame,
-    sector_momentum: pd.DataFrame,
-    sector_volatility: pd.DataFrame,
+    factors_combined,
+    categorizations,
+    sector_value,
+    sector_dividend,    # 4th
+    sector_momentum,    # 5th
+    sector_volatility,  # 6th
 ) -> tuple[pd.DataFrame, list[str]]:
     """Z-score each factor vs its sector mean/std."""
     sector_dfs = {
         "value": sector_value,
         "momentum": sector_momentum,
         "volatility": sector_volatility,
+        "dividend": sector_dividend,
     }
 
     normalized_cols: dict[str, pd.Series] = {}
@@ -60,20 +66,30 @@ def normalize_factors(
     return pd.DataFrame(normalized_cols, index=factors_combined.index), sorted(tickers)
 
 
+def _factor_zscore(normalized: pd.DataFrame, ticker: str, factor: str) -> pd.Series:
+    """Return normalized z-score column, or zeros if factor missing for ticker."""
+    col = f"{ticker}_{factor}"
+    if col in normalized.columns:
+        return normalized[col].fillna(0)
+    return pd.Series(0.0, index=normalized.index)
+
+
 def combine_final_score(
     normalized: pd.DataFrame,
     tickers: list[str],
     momentum_weightage: float,
     value_weightage: float,
     volatility_weightage: float,
+    dividend_weightage: float,
 ) -> pd.DataFrame:
     """Blend normalized factor z-scores into one score per ticker."""
     final_score = pd.DataFrame(index=normalized.index)
     for ticker in tickers:
         final_score[ticker] = (
-            momentum_weightage * normalized[f"{ticker}_momentum"]
-            + value_weightage * normalized[f"{ticker}_value"]
-            + volatility_weightage * normalized[f"{ticker}_volatility"]
+            momentum_weightage * _factor_zscore(normalized, ticker, "momentum")
+            + value_weightage * _factor_zscore(normalized, ticker, "value")
+            + volatility_weightage * _factor_zscore(normalized, ticker, "volatility")
+            + dividend_weightage * _factor_zscore(normalized, ticker, "dividend")
         )
     return final_score.fillna(0)
 
@@ -84,16 +100,23 @@ def factor_strategy(
     sector_value: pd.DataFrame,
     sector_momentum: pd.DataFrame,
     sector_volatility: pd.DataFrame,
+    sector_dividend: pd.DataFrame,
     momentum_weightage: float = 0.4,
     value_weightage: float = 0.3,
     volatility_weightage: float = 0.3,
+    dividend_weightage: float = 0.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Z-score normalize factors by sector, then combine into a weighted final score."""
     normalized, tickers = normalize_factors(
-        factors_combined, categorizations, sector_value, sector_momentum, sector_volatility
+        factors_combined,
+        categorizations,
+        sector_value,
+        sector_dividend,
+        sector_momentum,
+        sector_volatility,
     )
     final_score = combine_final_score(
-        normalized, tickers, momentum_weightage, value_weightage, volatility_weightage
+        normalized, tickers, momentum_weightage, value_weightage, volatility_weightage, dividend_weightage
     )
     return normalized, final_score
 

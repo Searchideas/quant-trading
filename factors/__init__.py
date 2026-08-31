@@ -2,15 +2,17 @@ from pathlib import Path
 
 import pandas as pd
 
-from .io import load_book_data, load_categorizations, load_price_data
+from .io import load_book_data, load_categorizations, load_price_data, load_dividend_data
 from .momentum import MomentumFactor
 from .value import ValueFactor
 from .volatility import VolatilityFactor
+from .dividend import DividendFactor
 
 __all__ = [
     "ValueFactor",
     "MomentumFactor",
     "VolatilityFactor",
+    "DividendFactor",
     "load_price_data",
     "load_book_data",
     "load_categorizations",
@@ -32,6 +34,7 @@ def sector_mean(
 def factor_processing(
     price_data: pd.DataFrame,
     book_data: pd.DataFrame,
+    dividend_data: pd.DataFrame,
     market: str | None = None,
     processed_dir: Path | None = None,
     categorizations: pd.DataFrame | None = None,
@@ -51,13 +54,13 @@ def factor_processing(
     value_df = ValueFactor(price_data, book_data).calculate_value_factor()
     momentum_df = MomentumFactor(price_data).calculate_momentum()
     volatility_df = VolatilityFactor(price_data).calculate_volatility()
-
+    dividend_df = DividendFactor(price_data, dividend_data).calculate_dividend_factor()
     value_df.to_csv(processed_dir / "value_data.csv")
     momentum_df.to_csv(processed_dir / "momentum_data.csv")
     volatility_df.to_csv(processed_dir / "volatility_data.csv")
-
+    dividend_df.to_csv(processed_dir / "dividend_data.csv")
     factors_combined = pd.concat(
-        [
+        [   dividend_df.add_suffix("_dividend"),
             value_df.add_suffix("_value"),
             momentum_df.add_suffix("_momentum"),
             volatility_df.add_suffix("_volatility"),
@@ -71,11 +74,13 @@ def factor_processing(
     sector_volatility_mean, sector_volatility_std = sector_mean(
         volatility_df, categorizations
     )
+    sector_dividend_mean, sector_dividend_std = sector_mean(dividend_df, categorizations)
 
     for name, mean_df, std_df in [
         ("momentum", sector_momentum_mean, sector_momentum_std),
         ("value", sector_value_mean, sector_value_std),
         ("volatility", sector_volatility_mean, sector_volatility_std),
+        ("dividend", sector_dividend_mean, sector_dividend_std),
     ]:
         combined = pd.concat(
             {f"{s}_mean": mean_df[s] for s in mean_df.columns}
@@ -88,4 +93,4 @@ def factor_processing(
 
 
 if __name__ == "__main__":
-    factor_processing(load_price_data(), load_book_data())
+    factor_processing(load_price_data(), load_book_data(),load_dividend_data())

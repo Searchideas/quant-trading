@@ -48,16 +48,56 @@ class Benchmark:
             auto_adjust=True,
             progress=False,
         )
-        if data.empty:
-            raise ValueError(f"No data for {self.symbol}")
+        if not data.empty:
+            close = data["Close"]
+            if isinstance(close, pd.DataFrame):
+                close = close.iloc[:, 0]
+            close = close.dropna()
+            close.name = self.symbol
+            close.index.name = "Date"
+            return close
 
-        close = data["Close"]
-        if isinstance(close, pd.DataFrame):
-            close = close.iloc[:, 0]
-        close = close.dropna()
-        close.name = self.symbol
-        close.index.name = "Date"
+        # Fallback when yfinance/curl SSL fails on Windows
+        close = self._download_via_yahoo_chart(self.start_date, end)
+        if close.empty:
+            raise ValueError(f"No data for {self.symbol}")
         return close
+
+    def _download_via_yahoo_chart(self, start: str | None, end: str) -> pd.Series:
+        import requests
+
+        start_ts = int(pd.Timestamp(start or "2020-01-01").timestamp())
+        end_ts = int(pd.Timestamp(end).timestamp())
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{self.symbol}"
+        params = {
+            "period1": start_ts,
+            "period2": end_ts,
+            "interval": "1d",
+            "events": "history",
+        }
+        resp = requests.get(
+            url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=30
+        )
+        resp.raise_for_status()
+        result = resp.json()["chart"]["result"]
+        if not result:
+            return pd.Series(dtype=float, name=self.symbol)
+        payload = result[0]
+        timestamps = payload.get("timestamp") or []
+        closes = (payload.get("indicators") or {}).get("quote", [{}])[0].get("close") or []
+        series = pd.Series(
+            closes,
+            index=pd.to_datetime(timestamps, unit="s"),
+            name=self.symbol,
+            dtype=float,
+        ).dropna()
+        idx = series.index
+        if getattr(idx, "tz", None) is not None:
+            idx = idx.tz_localize(None)
+        series.index = idx.normalize()
+        series = series[~series.index.duplicated(keep="last")]
+        series.index.name = "Date"
+        return series
 
     def summarize(self) -> pd.Series:
         rets = self.returns

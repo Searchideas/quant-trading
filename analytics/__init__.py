@@ -15,6 +15,8 @@ def run_analytics(
     plot_path: Path | None = None,
     costs_plot_path: Path | None = None,
     weights: pd.DataFrame | None = None,
+    benchmark_equity: pd.Series | None = None,
+    benchmark_label: str = "Benchmark",
 ) -> dict[str, pd.Series | pd.DataFrame]:
     """Summarize backtest, save charts, and optional rebalance trade table."""
     from paths import get_paths
@@ -29,7 +31,12 @@ def run_analytics(
     stats = summarize(backtest, initial_capital)
     stats.to_csv(processed_dir / "performance_summary.csv")
 
-    plot_backtest(backtest, save_path=plot_path)
+    plot_backtest(
+        backtest,
+        save_path=plot_path,
+        benchmark_equity=benchmark_equity,
+        benchmark_label=benchmark_label,
+    )
     plot_trading_costs(backtest, save_path=costs_plot_path)
 
     rebalance_table = pd.DataFrame()

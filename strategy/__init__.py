@@ -30,6 +30,7 @@ def run_strategy(
     momentum_weight: float | None = None,
     value_weight: float | None = None,
     volatility_weight: float | None = None,
+    dividend_weight: float | None = None,
     initial_capital: float | None = None,
     benchmark_symbol: str | None = None,
     cost_rate: float | None = None,
@@ -51,6 +52,9 @@ def run_strategy(
     volatility_weight = (
         config.VOLATILITY_WEIGHT if volatility_weight is None else volatility_weight
     )
+    dividend_weight = (
+        config.DIVIDEND_WEIGHT if dividend_weight is None else dividend_weight
+    )
     initial_capital = (
         config.INITIAL_CAPITAL if initial_capital is None else initial_capital
     )
@@ -65,9 +69,11 @@ def run_strategy(
         data["sector_value"],
         data["sector_momentum"],
         data["sector_volatility"],
+        data["sector_dividend"],
         momentum_weightage=momentum_weight,
         value_weightage=value_weight,
         volatility_weightage=volatility_weight,
+        dividend_weightage=dividend_weight,
     )
 
     weights = select_sector_best_weights(
@@ -94,18 +100,6 @@ def run_strategy(
     ).run()
     backtest.to_csv(processed_dir / "backtest_results.csv")
 
-    analytics_dir = ROOT / "analytics" / market
-    analytics_out = run_analytics(
-        backtest,
-        initial_capital=initial_capital,
-        processed_dir=processed_dir,
-        plot_path=analytics_dir / "backtest.png",
-        costs_plot_path=analytics_dir / "trading_costs.png",
-        weights=weights,
-    )
-    stats = analytics_out["stats"]
-    rebalance_table = analytics_out["rebalance_table"]
-
     start = data["price_data"].index[0].strftime("%Y-%m-%d")
     end = (data["price_data"].index[-1] + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
     benchmark = Benchmark(
@@ -114,6 +108,21 @@ def run_strategy(
         end_date=end,
         initial_capital=initial_capital,
     )
+
+    analytics_dir = ROOT / "analytics" / market
+    analytics_out = run_analytics(
+        backtest,
+        initial_capital=initial_capital,
+        processed_dir=processed_dir,
+        plot_path=analytics_dir / "backtest.png",
+        costs_plot_path=analytics_dir / "trading_costs.png",
+        weights=weights,
+        benchmark_equity=benchmark.equity,
+        benchmark_label=benchmark_symbol,
+    )
+    stats = analytics_out["stats"]
+    rebalance_table = analytics_out["rebalance_table"]
+
     comparison = benchmark.print_comparison(stats)
     comparison.to_csv(processed_dir / "strategy_vs_benchmark.csv")
     print(f"\nSaved comparison to {processed_dir / 'strategy_vs_benchmark.csv'}")

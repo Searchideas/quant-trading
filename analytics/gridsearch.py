@@ -22,15 +22,23 @@ from strategy.factor_strategy import (
 )
 
 
-def _weight_grid(step: float = 0.1) -> list[tuple[float, float, float]]:
-    """All (momentum, value, volatility) weights that sum to 1."""
+def _weight_grid(step: float = 0.1) -> list[tuple[float, float, float, float]]:
+    """All (momentum, value, volatility, dividend) weights that sum to 1."""
     weights = []
     for w_m in np.arange(0, 1.0 + step / 2, step):
         for w_v in np.arange(0, 1.0 - w_m + step / 2, step):
-            w_vol = round(1.0 - w_m - w_v, 4)
-            if w_vol < -1e-9:
-                continue
-            weights.append((round(w_m, 4), round(w_v, 4), round(max(w_vol, 0.0), 4)))
+            for w_vol in np.arange(0, 1.0 - w_m - w_v + step / 2, step):
+                w_div = round(1.0 - w_m - w_v - w_vol, 4)
+                if w_div < -1e-9:
+                    continue
+                weights.append(
+                    (
+                        round(w_m, 4),
+                        round(w_v, 4),
+                        round(max(w_vol, 0.0), 4),
+                        round(max(w_div, 0.0), 4),
+                    )
+                )
     return weights
 
 
@@ -58,6 +66,7 @@ def gridsearch_factor_weights(
         data["factors_combined"],
         data["categorizations"],
         data["sector_value"],
+        data["sector_dividend"],
         data["sector_momentum"],
         data["sector_volatility"],
     )
@@ -66,8 +75,10 @@ def gridsearch_factor_weights(
     grid = _weight_grid(step)
     print(f"Running grid search over {len(grid)} weight combinations...", flush=True)
 
-    for i, (w_m, w_v, w_vol) in enumerate(grid, 1):
-        final_score = combine_final_score(normalized, tickers, w_m, w_v, w_vol)
+    for i, (w_m, w_v, w_vol, w_div) in enumerate(grid, 1):
+        final_score = combine_final_score(
+            normalized, tickers, w_m, w_v, w_vol, w_div
+        )
         weights = select_sector_best_weights(
             final_score,
             data["categorizations"],
@@ -88,6 +99,7 @@ def gridsearch_factor_weights(
                 "momentum_weight": w_m,
                 "value_weight": w_v,
                 "volatility_weight": w_vol,
+                "dividend_weight": w_div,
                 "sharpe": sharpe_ratio(rets),
                 "adjusted_sharpe": adjusted_sharpe(rets),
                 "total_return": bt["equity"].iloc[-1] / initial_capital - 1,
@@ -95,7 +107,7 @@ def gridsearch_factor_weights(
                 "vol": rets.std() * np.sqrt(252),
             }
         )
-        if i % 10 == 0 or i == len(grid):
+        if i % 50 == 0 or i == len(grid):
             print(f"  {i}/{len(grid)} done")
 
     results = (
@@ -123,9 +135,10 @@ if __name__ == "__main__":
     best = results.iloc[0]
     print("\n=== Best by Adjusted Sharpe ===")
     print(
-        f"momentum={best['momentum_weight']:.1f}, "
-        f"value={best['value_weight']:.1f}, "
-        f"volatility={best['volatility_weight']:.1f}"
+        f"momentum={best['momentum_weight']:.2f}, "
+        f"value={best['value_weight']:.2f}, "
+        f"volatility={best['volatility_weight']:.2f}, "
+        f"dividend={best['dividend_weight']:.2f}"
     )
     print(
         f"adjusted_sharpe={best['adjusted_sharpe']:.3f}, sharpe={best['sharpe']:.3f}"

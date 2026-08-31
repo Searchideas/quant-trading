@@ -6,17 +6,50 @@ import pandas as pd
 from analytics.performance import max_drawdown
 
 
-def plot_backtest(bt: pd.DataFrame, save_path: Path | None = None) -> None:
+def _normalize_index(index: pd.Index) -> pd.DatetimeIndex:
+    idx = pd.to_datetime(index)
+    if getattr(idx, "tz", None) is not None:
+        idx = idx.tz_localize(None)
+    return idx.normalize()
+
+
+def _align_equity(equity: pd.Series, target_index: pd.Index) -> pd.Series:
+    series = equity.copy()
+    series.index = _normalize_index(series.index)
+    series = series[~series.index.duplicated(keep="last")]
+    target = _normalize_index(target_index)
+    return series.reindex(target).ffill().bfill()
+
+
+def plot_backtest(
+    bt: pd.DataFrame,
+    save_path: Path | None = None,
+    benchmark_equity: pd.Series | None = None,
+    benchmark_label: str = "Benchmark",
+) -> None:
     dd = max_drawdown(bt["equity"])
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
 
-    axes[0].plot(bt.index, bt["equity"])
+    axes[0].plot(bt.index, bt["equity"], label="Strategy", color="C0")
+    if benchmark_equity is not None and len(benchmark_equity):
+        bm_eq = _align_equity(benchmark_equity, bt.index)
+        axes[0].plot(
+            bt.index, bm_eq.values, label=benchmark_label, color="C1", alpha=0.9
+        )
+        axes[0].legend(loc="upper left")
     axes[0].set_title("Portfolio value")
     axes[0].set_ylabel("SGD")
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].fill_between(dd.index, dd, 0, color="red", alpha=0.4)
+    axes[1].fill_between(dd.index, dd, 0, color="red", alpha=0.35, label="Strategy")
+    if benchmark_equity is not None and len(benchmark_equity):
+        bm_eq = _align_equity(benchmark_equity, bt.index)
+        bm_dd = max_drawdown(bm_eq.dropna())
+        axes[1].plot(
+            bt.index, bm_dd.values, color="C1", alpha=0.9, label=benchmark_label
+        )
+        axes[1].legend(loc="lower left")
     axes[1].set_title("Drawdown")
     axes[1].grid(True, alpha=0.3)
 

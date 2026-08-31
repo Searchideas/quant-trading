@@ -75,6 +75,23 @@ def download_book_data(symbols: list[str]) -> pd.DataFrame:
     book_data.index.name = "Date"
     return book_data
 
+def download_dividend_data(symbols: list[str]) -> pd.DataFrame:
+    frames = {}
+    for symbol in symbols:
+        try:
+            dividend = yf.Ticker(symbol).dividends
+            if dividend.empty:
+                continue
+            frames[symbol] = dividend
+        except Exception as e:
+            print(f"{symbol}: {e}")
+    if not frames:
+        return pd.DataFrame()
+    dividend_data = pd.DataFrame(frames)
+    dividend_data.index = pd.to_datetime(dividend_data.index)
+    dividend_data = dividend_data.sort_index()
+    dividend_data.index.name = "Date"
+    return dividend_data
 
 def sector_categorization(symbols: list[str]) -> pd.DataFrame:
     rows = {}
@@ -102,6 +119,10 @@ def download_all(
     raw_dir, _ = ensure_market_dirs(market)
     tickers = tickers or load_universe(market)
 
+    """Download dividend data"""
+    print(f"[{market}] Downloading dividend data...")
+    dividend_data = download_dividend_data(tickers)
+
     print(f"[{market}] Downloading categorizations for {len(tickers)} symbols...")
     categorizations_data = sector_categorization(tickers)
     print(f"[{market}] Downloading price data from {cfg.start_date}...")
@@ -109,6 +130,7 @@ def download_all(
     print(f"[{market}] Downloading book data...")
     book_data = download_book_data(tickers)
 
+    dividend_data.to_csv(raw_dir / "dividend_data.csv")
     price_data.to_csv(raw_dir / "price_data.csv")
     book_data.to_csv(raw_dir / "book_data.csv")
     categorizations_data.to_csv(raw_dir / "categorizations_data.csv")

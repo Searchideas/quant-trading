@@ -25,3 +25,7 @@ def load_book_data(market: str | None = None) -> pd.DataFrame:
 def load_categorizations(market: str | None = None) -> pd.DataFrame:
     raw_dir, _ = get_paths(market)
     return pd.read_csv(raw_dir / "categorizations_data.csv", index_col=0)
+
+def load_dividend_data(market: str | None = None) -> pd.DataFrame:
+    raw_dir, _ = get_paths(market)
+    return pd.read_csv(raw_dir / "dividend_data.csv", index_col=0, parse_dates=True)

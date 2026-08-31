@@ -39,11 +39,12 @@ def run_pipeline(
     print("\n" + "=" * 60)
     print(f"Step 2/3: Computing factors [{market}]...")
     print("=" * 60)
-    from factors import factor_processing, load_book_data, load_price_data
+    from factors import factor_processing, load_book_data, load_dividend_data, load_price_data
 
     factor_processing(
         load_price_data(market),
         load_book_data(market),
+        load_dividend_data(market),
         market=market,
     )
 

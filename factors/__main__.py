@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from factors import factor_processing, load_book_data, load_price_data
+from factors import factor_processing, load_book_data, load_price_data, load_dividend_data
 
 if __name__ == "__main__":
     import argparse
@@ -16,5 +16,6 @@ if __name__ == "__main__":
     factor_processing(
         load_price_data(args.market),
         load_book_data(args.market),
+        load_dividend_data(args.market),
         market=args.market,
     )
