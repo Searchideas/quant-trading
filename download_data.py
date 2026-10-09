@@ -37,20 +37,50 @@ def load_universe(market: str | None = None) -> list[str]:
     return list(SG_TICKERS)
 
 
-def download_prices(symbols: list[str], start_date: str) -> pd.DataFrame:
+def download_yahoo_prices(symbols: list[str], start_date: str) -> pd.DataFrame:
+    """Yahoo closes. Secondary source: fills symbols Tiger did not return."""
     data = yf.download(
         symbols,
         start=start_date,
-        end=pd.Timestamp.today() - pd.Timedelta(days=1),
+        # Yahoo's end date is exclusive, so today includes the prior session.
+        end=pd.Timestamp.today().normalize(),
         auto_adjust=True,
         progress=False,
     )
+    if data is None or data.empty:
+        return pd.DataFrame()
     close = data["Close"]
     if isinstance(close, pd.Series):
         close = close.to_frame()
-    close = close.dropna(axis=1, how="all")
+    close = close.dropna(axis=1, how="all").dropna(axis=0, how="all")
     close.index.name = "Date"
     return close
+
+
+def download_prices(symbols: list[str], start_date: str, market: str = "us") -> pd.DataFrame:
+    """Tiger closes first. Yahoo fills missing symbols and is printed as a check."""
+    from broker.quotes import close_mismatches, combine_closes, download_tiger_closes
+
+    print(f"[{market}] Requesting Tiger daily closes...")
+    tiger = download_tiger_closes(symbols, start_date, market)
+    print(f"[{market}] Requesting Yahoo closes for the cross-check...")
+    yahoo = download_yahoo_prices(symbols, start_date)
+    prices, filled = combine_closes(tiger, yahoo)
+    if tiger.empty:
+        print(f"[{market}] Using Yahoo prices for {prices.shape[1]} symbols.")
+        return prices
+
+    mismatches = close_mismatches(tiger, yahoo)
+    print(
+        f"[{market}] Tiger prices: {tiger.shape[1]} symbols. "
+        f"Yahoo filled {len(filled)}. "
+        f"Closes differing by more than 1%: {len(mismatches)}."
+    )
+    if not mismatches.empty:
+        preview = mismatches.head(15).copy()
+        preview["gap"] = (preview["gap"] * 100).map(lambda gap: f"{gap:.2f}%")
+        print(preview.to_string(index=False))
+    return prices
 
 
 def download_book_data(symbols: list[str]) -> pd.DataFrame:
@@ -75,7 +105,8 @@ def download_book_data(symbols: list[str]) -> pd.DataFrame:
     book_data.index.name = "Date"
     return book_data
 
-def download_dividend_data(symbols: list[str]) -> pd.DataFrame:
+def download_yahoo_dividends(symbols: list[str]) -> pd.DataFrame:
+    """Yahoo dividend payments. Secondary source for symbols Tiger missed."""
     frames = {}
     for symbol in symbols:
         try:
@@ -89,9 +120,35 @@ def download_dividend_data(symbols: list[str]) -> pd.DataFrame:
         return pd.DataFrame()
     dividend_data = pd.DataFrame(frames)
     dividend_data.index = pd.to_datetime(dividend_data.index)
+    if getattr(dividend_data.index, "tz", None) is not None:
+        dividend_data.index = dividend_data.index.tz_localize(None)
+    dividend_data.index = dividend_data.index.normalize()
     dividend_data = dividend_data.sort_index()
     dividend_data.index.name = "Date"
     return dividend_data
+
+
+def download_dividend_data(
+    symbols: list[str],
+    start_date: str,
+    market: str = "us",
+) -> pd.DataFrame:
+    """Tiger dividend history first. Yahoo fills symbols Tiger did not return."""
+    from broker.quotes import combine_closes, download_tiger_dividends
+
+    print(f"[{market}] Requesting Tiger dividends...")
+    tiger = download_tiger_dividends(symbols, start_date, market)
+    print(f"[{market}] Requesting Yahoo dividends for the cross-check...")
+    yahoo = download_yahoo_dividends(symbols)
+    dividends, filled = combine_closes(tiger, yahoo)
+    if tiger.empty:
+        print(f"[{market}] Using Yahoo dividends for {dividends.shape[1]} symbols.")
+        return dividends
+    print(
+        f"[{market}] Tiger dividends: {tiger.shape[1]} symbols. "
+        f"Yahoo filled {len(filled)}."
+    )
+    return dividends
 
 def sector_categorization(symbols: list[str]) -> pd.DataFrame:
     rows = {}
@@ -121,12 +178,12 @@ def download_all(
 
     """Download dividend data"""
     print(f"[{market}] Downloading dividend data...")
-    dividend_data = download_dividend_data(tickers)
+    dividend_data = download_dividend_data(tickers, cfg.start_date, market)
 
     print(f"[{market}] Downloading categorizations for {len(tickers)} symbols...")
     categorizations_data = sector_categorization(tickers)
     print(f"[{market}] Downloading price data from {cfg.start_date}...")
-    price_data = download_prices(tickers, cfg.start_date)
+    price_data = download_prices(tickers, cfg.start_date, market)
     print(f"[{market}] Downloading book data...")
     book_data = download_book_data(tickers)
 

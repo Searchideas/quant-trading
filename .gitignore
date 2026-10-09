@@ -1,0 +1,11 @@
+# Tiger Open API secrets
+tiger_openapi_config.properties
+tiger_openapi_token.properties
+private_key.pem
+telegram.env
+
+__pycache__/
+.pytest_cache/
+*.pyc
+data/us/processed/leaf_return_library.npz
+_yield_probe.txt

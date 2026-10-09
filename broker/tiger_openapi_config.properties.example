@@ -1,0 +1,11 @@
+# Copy this file to the project root as tiger_openapi_config.properties
+# and fill in the values from https://developer.itigerup.com/profile
+# Use the paper-account number until a dry run looks right.
+# Do not put a real private key in this example file.
+
+private_key_pk1=YOUR_PKCS1_PRIVATE_KEY
+private_key_pk8=YOUR_PKCS8_PRIVATE_KEY
+tiger_id=YOUR_TIGER_ID
+account=YOUR_PAPER_OR_LIVE_ACCOUNT
+license=TBSG
+env=PROD

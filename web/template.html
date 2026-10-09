@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factor book and the yield tree</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --paper: #fafaf9;
+    --card: #ffffff;
+    --accent: #1d4e89;
+    --lag: #f4d6d2;
+    --lag-line: #9b3b32;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.55 Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  .scroll { overflow-x: auto; }
+  h1 { font-size: 32px; line-height: 1.2; font-weight: 600; margin: 0 0 8px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lede { font-size: 18px; }
+  nav { display: flex; gap: 8px; margin: 18px 0 22px; }
+  button, select {
+    font: 15px/1.2 system-ui, sans-serif;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .stats { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-bottom: 8px; }
+  .stat b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+  .stat span { color: var(--muted); font: 13px/1.3 system-ui, sans-serif; }
+  table { width: 100%; border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 8px 0 16px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.lag td:first-child { box-shadow: inset 3px 0 0 var(--lag-line); }
+  tr.now td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .note { color: var(--muted); font: 13px/1.45 system-ui, sans-serif; }
+  svg.chart { width: 100%; height: auto; display: block; cursor: crosshair; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+  .bar { display: flex; height: 28px; gap: 2px; margin: 8px 0 12px; }
+  .bar i { display: block; height: 100%; border-radius: 4px; background: #e7e5e4; }
+  .bar i.lag { background: var(--lag); outline: 1px solid var(--lag-line); }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  .hidden { display: none; }
+  footer { margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Factor book and the yield tree</h1>
+  <p class="lede">A long-only US book. Each session ranks stocks inside their sector. The factor mix changes only when last month's 10-year yield and credit spread change state.</p>
+  <nav>
+    <button id="tab-method" type="button" aria-pressed="true">Method</button>
+    <button id="tab-performance" type="button" aria-pressed="false">Performance</button>
+  </nav>
+
+  <section id="method">
+    <p>On a given day the book is long-only US stocks. Once a book has been formed, the sectors that produced a pick are scaled to the whole account. There is no cash sleeve. The leaf does not change how much is invested in the market. It changes which factors rank the stocks. The universe is the first 100 symbols on today's list. Names that have left the market are not added back, so the history never has to sell a stock that disappeared. A name with no price yet is not held. Where Tiger returns a history, that history is the one used. Those bars are backward-adjusted, so splits and past dividends are already in the price. Yahoo fills a symbol Tiger did not return, and its adjusted close also includes splits and dividends. The latest close is compared between the two sources, and a gap above 1 percent is printed. The two series are not averaged. The cash dividend is not added a second time on top of the adjusted price.</p>
+    <p>Book value per share is Yahoo quarterly common equity divided by ordinary shares. Yahoo dates that figure on the quarter-end, and the test carries it forward from that date. It does not wait for a filing lag, so the quarter-end book is used before a filing would have been public. The dividend signal is the last cash dividend per share divided by that day's price, from Tiger, with Yahoo filling symbols Tiger missed, and then carried forward until the next payment. It is one payment, not an annualized yield. Sector and company size are a current snapshot, so a name selected in 2017 is sized with today's sector weight. The ten-year yield is FRED series GS10, the monthly average of the 10-year constant-maturity yield. Credit is Moody's BAA corporate yield minus AAA. Both are monthly. The return path starts in January 2017.</p>
+    <h2>From a price to a score</h2>
+    <p>A bank is not ranked against a software company. Each raw factor is a z-score inside its own sector: the stock minus the sector mean, divided by the sector standard deviation. The score is the weighted sum of those z-scores, and a higher score is preferred. The weights are written momentum / value / dividend / low volatility.</p>
+    <p>Value is book value per share divided by price, so a cheaper stock scores higher. It is weak where the quarter-end book is stale, and where a firm has little book equity, because that firm keeps looking expensive. The dividend score is that one payment divided by price. A falling price raises it even when the dividend did not grow. Low volatility is 1 divided by the standard deviation of daily returns over the last 30 sessions, so a calmer stock scores higher. The window is short, so the names can change often. Momentum is the number of sessions, out of the last 45, that closed up. It is not a twelve-month return. The search covered the 286 mixes on a 10-point grid, plus one mix off that grid. On every leaf the highest Sharpe had momentum at zero.</p>
+    <h2>From a score to a book</h2>
+    <p>Inside each sector the two highest scores are kept. A sector's weight is its share of market cap among the sectors that produced a pick, and the two names split that weight by their own market caps. The book does not trade because a weight has drifted. It trades when the set of names changes. The weighting function can cap a sector at 35 percent. This test passes 100 percent, so that cap does not operate. A large sector can be a large part of the book, and the larger of its two names can be one large position. That is a construction choice. There is no separate risk model.</p>
+    <h2>Why the weights change</h2>
+    <p>Once a month, two questions are asked. Is GS10 above the median of its own previous 120 months? Is the BAA minus AAA spread above the median of its own previous 120 months? The return month uses the previous month's answers, so the label for March is known at the end of February. Four leaves follow. Nothing is trained on individual stocks. The stock scores still move every session. Only the mix waits for the leaf to change.</p>
+    <p>On the days each leaf was in force, the search kept the mix with the highest Sharpe of that leaf's own daily gross returns. Gross means before trading cost. Sharpe is the mean of those daily returns divided by their standard deviation, annualized with the square root of 252. On the low-yield, tight-credit leaf, more than one split between value and dividend shared that best Sharpe when momentum and low volatility were both zero. The mix shown is 100 percent dividend because that mix was reached first, not because it beat the ties. The last yield month in the file is September 2026. Its leaf is high 10-year yield and tight credit, and the mix is 0 / 60 / 30 / 10. Later sessions keep that leaf until the next yield month is in the file. A separate rule, which could move only value and dividend by 10 points and had to freeze the mapping before 2017, finished next to a fixed 0 / 60 / 30 / 10 book. The path on this page uses mixes chosen on these same years. It is a description of the test, not a track record.</p>
+    <h2>What the result is compared with</h2>
+    <p>The comparison is SPY, the S&amp;P 500 ETF, on the same sessions. Its line uses the adjusted close, so dividends are in the price. SPY is not charged the stock-trading schedule. It is the large-cap US market, not a value portfolio and not a low-volatility portfolio. A gap against it can come from holding today's survivors, from sizing sectors at today's market caps, or from the factor mix.</p>
+    <h2>When the trade happens, and at what price</h2>
+    <p>The score on a day uses that day's close, and the test assumes the new book is filled at that same close. There is no wait until the next open. The new weights then earn the move from that close to the next close, so the session that created the decision does not receive its own return. Clicking a session shows the target book at that close. Cost is the Tiger US stock schedule, charged when a weight changes, and sized from the account value before that day's move. For an order of at least one share, commission is $0.005 a share with a $0.99 minimum, and the platform fee is $0.005 a share with a $1 minimum. Each of those is capped at 0.5 percent of the trade. A settlement fee of $0.003 a share is charged under the same cap, and a CAT fee of $0.000003 a share is added. An order under one share pays no commission and a platform fee of 1 percent of the trade, capped at $1. Sells pay an SEC fee of 0.00206 percent of the sale, with a $0.01 minimum. Before 1 October 2026, sells also pay a FINRA trading-activity fee of $0.000195 a share, with a $0.01 minimum and a $9.79 maximum. Singapore GST of 9 percent is applied to the sum of those fees. The test account is $100,000.</p>
+  </section>
+
+  <section id="performance" class="hidden">
+    <div class="stats">
+      <div class="stat"><b id="stat-book"></b><span id="stat-book-label"></span></div>
+      <div class="stat"><b id="stat-spy"></b><span>SPY, same sessions</span></div>
+      <div class="stat"><b id="stat-cost"></b><span>Trading cost on the $100,000 account</span></div>
+    </div>
+    <h2>Full path against the S&amp;P 500</h2>
+    <p class="note">CAGR is the compounded annual rate from the first close to the latest close, using the count of daily returns divided by 252. Sharpe is the mean daily return divided by its standard deviation, times the square root of 252. Sortino uses the same mean and the same annualization, and divides by the downside deviation: the square root of the mean squared return on days below zero, with up days counted as zero. Maximum drawdown is the deepest peak-to-trough on the equity path. Calmar is CAGR divided by the absolute maximum drawdown. The book is after the Tiger cost schedule. SPY is not. These mixes were chosen on the same history.</p>
+    <div class="scroll"><table id="scorecard"></table></div>
+    <p class="note" id="months-ahead"></p>
+    <h2>Time regions</h2>
+    <p class="note">Each block is one leaf, from the prior month-end to this period's month-end. A red block lagged SPY. The mix is momentum / value / dividend / low volatility. The line below is every session.</p>
+    <div id="strip" class="bar"></div>
+    <table id="periods"></table>
+    <h2>Year by year against the S&amp;P 500</h2>
+    <p class="note">2017 starts at the first close in the file. Each later year runs from the prior year-end close to that year's last close. A finished year's return is that year's growth, so it is not repeated as a second CAGR. Sharpe, Sortino, and volatility use that year's daily returns and the same definitions as the full path. Maximum drawdown is measured inside the year, including the move off the prior year-end close. 2026 is through the latest close, not a finished year.</p>
+    <div class="scroll"><table id="years"></table></div>
+    <h2>Growth of 100, daily close</h2>
+    <p class="note">The vertical scale is growth of 100, logarithmic, rebased at the first close. Click the line for that session's target book.</p>
+    <div class="tools">
+      <button id="prev" type="button">Previous day</button>
+      <button id="next" type="button">Next day</button>
+      <label class="note" for="month">Month-end</label>
+      <select id="month"></select>
+    </div>
+    <svg id="chart" class="chart" viewBox="0 0 720 280" role="img" aria-label="Daily growth of 100 for the leaf book and SPY"></svg>
+    <h2 id="day-title"></h2>
+    <p id="day-copy"></p>
+    <table id="holds"></table>
+    <p class="note">This is the target book at this session's close. It earns the next session, not this one. Weights stay put until the name set changes. Sector sizes use today's market-cap snapshot, and the universe is today's first 100 symbols.</p>
+    <h2>Trading cost by month</h2>
+    <p class="note">Dollars charged in each month. The first month includes building the book.</p>
+    <svg id="cost-chart" class="chart" viewBox="0 0 720 180" role="img" aria-label="Monthly trading cost in dollars"></svg>
+    <h2>Rebalance days by month</h2>
+    <p class="note">Sessions in the month when the selected names changed.</p>
+    <svg id="rebal-chart" class="chart" viewBox="0 0 720 160" role="img" aria-label="Rebalance days per month"></svg>
+  </section>
+  <footer class="note" id="foot"></footer>
+</main>
+<script>
+const DATA = /*@@DATA@@*/null;
+const LEAF_NAME = [
+  "Low 10-year, tight credit",
+  "Low 10-year, wide credit",
+  "High 10-year, tight credit",
+  "High 10-year, wide credit"
+];
+const MIX = ["0 / 0 / 100 / 0", "0 / 0 / 70 / 30", "0 / 60 / 30 / 10", "0 / 100 / 0 / 0"];
+const svgNS = "http://www.w3.org/2000/svg";
+
+function el(name, attrs, parent) {
+  const node = document.createElementNS(svgNS, name);
+  Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+  parent.appendChild(node);
+  return node;
+}
+
+function show(which) {
+  document.getElementById("method").classList.toggle("hidden", which !== "method");
+  document.getElementById("performance").classList.toggle("hidden", which !== "performance");
+  document.getElementById("tab-method").setAttribute("aria-pressed", which === "method" ? "true" : "false");
+  document.getElementById("tab-performance").setAttribute("aria-pressed", which === "performance" ? "true" : "false");
+}
+
+let pick = DATA.dates.length - 1;
+
+function holdings(index) {
+  return DATA.books[DATA.holdId[index]].split("|").filter(Boolean).map((row) => {
+    const cut = row.lastIndexOf(" ");
+    return [row.slice(0, cut), row.slice(cut + 1) + "%"];
+  });
+}
+
+function renderDay() {
+  const leaf = Number(DATA.leaf[pick]);
+  const changed = DATA.traded[pick] === "1";
+  document.getElementById("day-title").textContent = DATA.dates[pick];
+  document.getElementById("day-copy").textContent =
+    LEAF_NAME[leaf] + ". Mix " + MIX[leaf] + ". Growth of 100 is " +
+    DATA.book[pick].toLocaleString() + " for the book and " +
+    DATA.spy[pick].toLocaleString() + " for SPY. Trading cost charged this session was $" +
+    DATA.cost[pick].toLocaleString() + ". " +
+    (changed ? "The name set changed at this close." : "The name set did not change. This is the book carried from the last change.");
+  const table = document.getElementById("holds");
+  table.innerHTML = "<thead><tr><th>Name</th><th class='num'>Target weight at this close</th></tr></thead>";
+  const body = document.createElement("tbody");
+  holdings(pick).forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + row[0] + "</td><td class='num'>" + row[1] + "</td>";
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  document.getElementById("prev").disabled = pick === 0;
+  document.getElementById("next").disabled = pick === DATA.dates.length - 1;
+  document.getElementById("month").value = DATA.dates[pick].slice(0, 7);
+  drawChart();
+}
+
+function drawChart() {
+  const svg = document.getElementById("chart");
+  svg.replaceChildren();
+  const width = 720, height = 280, left = 48, right = 12, top = 28, bottom = 28;
+  const lo = Math.log(Math.min(...DATA.book, ...DATA.spy));
+  const hi = Math.log(Math.max(...DATA.book, ...DATA.spy));
+  const xOf = (index) => left + (index / (DATA.dates.length - 1)) * (width - left - right);
+  const yOf = (value) => top + (1 - (Math.log(value) - lo) / (hi - lo)) * (height - top - bottom);
+  const pathOf = (series) => series.map((value, index) => (index === 0 ? "M" : "L") + xOf(index).toFixed(1) + "," + yOf(value).toFixed(1)).join(" ");
+  el("text", { x: left, y: 16, fill: "#1d4e89", "font-size": 12, "font-family": "system-ui, sans-serif" }, svg).textContent = "Leaf book";
+  el("text", { x: left + 78, y: 16, fill: "#57534e", "font-size": 12, "font-family": "system-ui, sans-serif" }, svg).textContent = "SPY";
+  [100, 200, 500, 1000, 2000, 4000, 8000].filter((tick) => tick >= Math.min(...DATA.book, ...DATA.spy) && tick <= Math.max(...DATA.book, ...DATA.spy)).forEach((tick) => {
+    el("line", { x1: left, x2: width - right, y1: yOf(tick), y2: yOf(tick), stroke: "#e7e5e4" }, svg);
+    const label = el("text", { x: left - 6, y: yOf(tick) + 4, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg);
+    label.textContent = String(tick);
+  });
+  el("path", { d: pathOf(DATA.spy), fill: "none", stroke: "#57534e", "stroke-width": 1.5 }, svg);
+  el("path", { d: pathOf(DATA.book), fill: "none", stroke: "#1d4e89", "stroke-width": 1.75 }, svg);
+  el("line", { x1: xOf(pick), x2: xOf(pick), y1: top, y2: height - bottom, stroke: "#1d4e89", "stroke-dasharray": "3 3" }, svg);
+  el("circle", { cx: xOf(pick), cy: yOf(DATA.book[pick]), r: 3.5, fill: "#1d4e89" }, svg);
+  el("text", { x: left, y: height - 8, fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.dates[0];
+  el("text", { x: width - right, y: height - 8, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.dates[DATA.dates.length - 1];
+  svg.onclick = (event) => {
+    const rect = svg.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    let best = 0;
+    let distance = Infinity;
+    for (let index = 0; index < DATA.dates.length; index += 1) {
+      const gap = Math.abs(xOf(index) - x);
+      if (gap < distance) { distance = gap; best = index; }
+    }
+    pick = best;
+    renderDay();
+  };
+}
+
+function spark(id, values, prefix) {
+  const svg = document.getElementById(id);
+  svg.replaceChildren();
+  const width = 720, height = id === "cost-chart" ? 180 : 160, left = 48, right = 8, top = 12, bottom = 22;
+  const hi = Math.max(...values, 1);
+  const xOf = (index) => left + (index / (values.length - 1)) * (width - left - right);
+  const yOf = (value) => top + (1 - value / hi) * (height - top - bottom);
+  const d = values.map((value, index) => (index === 0 ? "M" : "L") + xOf(index).toFixed(1) + "," + yOf(value).toFixed(1)).join(" ");
+  el("path", { d, fill: "none", stroke: id === "cost-chart" ? "#9b3b32" : "#1d4e89", "stroke-width": 1.5 }, svg);
+  el("text", { x: left - 6, y: yOf(hi) + 4, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = prefix + hi.toLocaleString();
+  el("text", { x: left, y: height - 6, fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.months[0];
+  el("text", { x: width - right, y: height - 6, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.months[DATA.months.length - 1];
+}
+
+function init() {
+  document.getElementById("stat-book").textContent = DATA.statBook;
+  document.getElementById("stat-spy").textContent = DATA.statSpy;
+  document.getElementById("stat-cost").textContent = DATA.statCost;
+  document.getElementById("stat-book-label").textContent = "Leaf book, " + DATA.dates[0] + " to " + DATA.dates[DATA.dates.length - 1];
+  const strip = document.getElementById("strip");
+  const total = DATA.periods.reduce((sum, period) => sum + period.months, 0);
+  DATA.periods.forEach((period) => {
+    const block = document.createElement("i");
+    block.style.width = (period.months / total * 100) + "%";
+    block.title = period.start + " to " + period.end;
+    if (period.lag) block.className = "lag";
+    strip.appendChild(block);
+  });
+  const table = document.getElementById("periods");
+  table.innerHTML = "<thead><tr><th>Period</th><th>Leaf</th><th>Mix</th><th class='num'>Book</th><th class='num'>SPY</th><th class='num'>Gap</th></tr></thead>";
+  const body = document.createElement("tbody");
+  DATA.periods.forEach((period, index) => {
+    const tr = document.createElement("tr");
+    if (period.lag) tr.className = "lag";
+    else if (index === DATA.periods.length - 1) tr.className = "now";
+    const label = period.start === period.end ? period.start : period.start + " to " + period.end;
+    tr.innerHTML = "<td>" + label + "</td><td>" + period.leaf + "</td><td>" + period.mix + "</td><td class='num'>" + period.book + "</td><td class='num'>" + period.spy + "</td><td class='num'>" + period.gap + "</td>";
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  const scorecard = document.getElementById("scorecard");
+  scorecard.innerHTML = "<thead><tr><th>Metric</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th></tr></thead>";
+  const scoreBody = document.createElement("tbody");
+  DATA.scorecard.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + row.metric + "</td><td class='num'>" + row.book + "</td><td class='num'>" + row.spy + "</td>";
+    scoreBody.appendChild(tr);
+  });
+  scorecard.appendChild(scoreBody);
+  document.getElementById("months-ahead").textContent = DATA.monthsAhead;
+  const years = document.getElementById("years");
+  years.innerHTML = "<thead><tr><th rowspan='2'>Year</th><th class='num' colspan='3'>Return</th><th class='num' colspan='2'>Sharpe</th><th class='num' colspan='2'>Sortino</th><th class='num' colspan='2'>Maximum drawdown</th><th class='num' colspan='2'>Volatility</th></tr><tr><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Excess</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th></tr></thead>";
+  const yearBody = document.createElement("tbody");
+  DATA.years.forEach((year) => {
+    const tr = document.createElement("tr");
+    if (year.lag) tr.className = "lag";
+    tr.innerHTML = "<td>" + year.label + "</td><td class='num'>" + year.book + "</td><td class='num'>" + year.spy + "</td><td class='num'>" + year.gap + "</td><td class='num'>" + year.bookSharpe + "</td><td class='num'>" + year.spySharpe + "</td><td class='num'>" + year.bookSortino + "</td><td class='num'>" + year.spySortino + "</td><td class='num'>" + year.bookDd + "</td><td class='num'>" + year.spyDd + "</td><td class='num'>" + year.bookVol + "</td><td class='num'>" + year.spyVol + "</td>";
+    yearBody.appendChild(tr);
+  });
+  years.appendChild(yearBody);
+  const month = document.getElementById("month");
+  DATA.months.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    month.appendChild(option);
+  });
+  month.onchange = () => {
+    let hit = 0;
+    DATA.dates.forEach((day, index) => { if (day.slice(0, 7) === month.value) hit = index; });
+    pick = hit;
+    renderDay();
+  };
+  document.getElementById("prev").onclick = () => { if (pick > 0) { pick -= 1; renderDay(); } };
+  document.getElementById("next").onclick = () => { if (pick < DATA.dates.length - 1) { pick += 1; renderDay(); } };
+  document.getElementById("tab-method").onclick = () => show("method");
+  document.getElementById("tab-performance").onclick = () => show("performance");
+  spark("cost-chart", DATA.mcost, "$");
+  spark("rebal-chart", DATA.mrebal, "");
+  document.getElementById("foot").textContent = "Page built " + DATA.built + ". Latest close in the file is " + DATA.dates[DATA.dates.length - 1] + ". A scheduled rebuild publishes the next session after the US close. The mixes were chosen on this same history.";
+  renderDay();
+}
+init();
+</script>
+</body>
+</html>

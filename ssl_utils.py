@@ -9,7 +9,10 @@ from pathlib import Path
 from config import ROOT
 
 
-def windows_ca_bundle() -> str:
+def windows_ca_bundle() -> str | None:
+    """Windows certificate bundle, or None where the system store is not used."""
+    if not hasattr(ssl, "enum_certificates"):
+        return None
     bundle = ROOT / "data" / "windows-ca-bundle.pem"
     bundle.parent.mkdir(parents=True, exist_ok=True)
     # Reuse existing bundle if SSL env already points at it (avoids Windows
@@ -39,10 +42,42 @@ def windows_ca_bundle() -> str:
     return str(bundle)
 
 
-def configure_ssl() -> str:
-    """Export Windows CAs and point curl/requests env vars at the bundle."""
+def _use_windows_ca_for_curl(ca: str) -> None:
+    """Point curl_cffi at the Windows bundle.
+
+    yfinance downloads through curl_cffi, which does not read CURL_CA_BUNDLE.
+    Default verify=True keeps using certifi and fails behind HTTPS inspection.
+    """
+    try:
+        from curl_cffi import requests as curl_requests
+    except ImportError:
+        return
+
+    session_cls = curl_requests.Session
+    if getattr(session_cls, "_quant_ca_patched", False):
+        return
+
+    orig_init = session_cls.__init__
+
+    def _init(self, *args, **kwargs):
+        if kwargs.get("verify", True) is True:
+            kwargs["verify"] = ca
+        return orig_init(self, *args, **kwargs)
+
+    session_cls.__init__ = _init
+    session_cls._quant_ca_patched = True
+
+
+def configure_ssl() -> str | None:
+    """Export Windows CAs and point curl/requests env vars at the bundle.
+
+    Linux and macOS keep the default trust store. The daily rebuild runs there.
+    """
     ca = windows_ca_bundle()
+    if not ca:
+        return None
     os.environ["CURL_CA_BUNDLE"] = ca
     os.environ["SSL_CERT_FILE"] = ca
     os.environ["REQUESTS_CA_BUNDLE"] = ca
+    _use_windows_ca_for_curl(ca)
     return ca

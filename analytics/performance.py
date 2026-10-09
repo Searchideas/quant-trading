@@ -15,6 +15,28 @@ def sharpe_ratio(rets: pd.Series, periods: int = TRADING_DAYS) -> float:
     return float(rets.mean() / rets.std() * np.sqrt(periods))
 
 
+def compounded_monthly(rets: pd.Series) -> pd.Series:
+    """Month return from compounding the daily returns inside each month."""
+    clean = rets.dropna()
+    if clean.empty:
+        return clean
+    return (1 + clean).resample("ME").prod() - 1
+
+
+def month_lead(strategy: pd.Series, benchmark: pd.Series) -> tuple[float, float]:
+    """Share of months the strategy beat the benchmark, and the median monthly gap."""
+    monthly = pd.concat(
+        [compounded_monthly(strategy), compounded_monthly(benchmark)],
+        axis=1,
+        keys=["strategy", "benchmark"],
+    ).dropna()
+    if monthly.empty:
+        return float("nan"), float("nan")
+    excess = monthly["strategy"] - monthly["benchmark"]
+    share = float((monthly["strategy"] > monthly["benchmark"]).mean())
+    return share, float(excess.median())
+
+
 def adjusted_sharpe(rets: pd.Series, periods: int = TRADING_DAYS) -> float:
     """Lo (2002) AR(1) adjustment for autocorrelated returns."""
     sr = sharpe_ratio(rets, periods)

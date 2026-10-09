@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .fundamentals import growth_and_quality, load_statement_frames
 from .io import load_book_data, load_categorizations, load_price_data, load_dividend_data
 from .momentum import MomentumFactor
 from .value import ValueFactor
@@ -55,18 +56,38 @@ def factor_processing(
     momentum_df = MomentumFactor(price_data).calculate_momentum()
     volatility_df = VolatilityFactor(price_data).calculate_volatility()
     dividend_df = DividendFactor(price_data, dividend_data).calculate_dividend_factor()
+    growth_df = pd.DataFrame(index=price_data.index)
+    quality_df = pd.DataFrame(index=price_data.index)
+    statements = load_statement_frames(market)
+    if statements is None:
+        print("Earnings statements not found. Growth and quality were skipped.")
+    else:
+        growth_df, quality_df = growth_and_quality(
+            statements["quarterly_income"],
+            statements["quarterly_shares"],
+            statements["quarterly_equity"],
+            statements["annual_income"],
+            statements["annual_shares"],
+            statements["annual_equity"],
+            price_data.index,
+        )
     value_df.to_csv(processed_dir / "value_data.csv")
     momentum_df.to_csv(processed_dir / "momentum_data.csv")
     volatility_df.to_csv(processed_dir / "volatility_data.csv")
     dividend_df.to_csv(processed_dir / "dividend_data.csv")
-    factors_combined = pd.concat(
-        [   dividend_df.add_suffix("_dividend"),
-            value_df.add_suffix("_value"),
-            momentum_df.add_suffix("_momentum"),
-            volatility_df.add_suffix("_volatility"),
-        ],
-        axis=1,
-    )
+    growth_df.to_csv(processed_dir / "growth_data.csv")
+    quality_df.to_csv(processed_dir / "quality_data.csv")
+    factor_frames = [
+        dividend_df.add_suffix("_dividend"),
+        value_df.add_suffix("_value"),
+        momentum_df.add_suffix("_momentum"),
+        volatility_df.add_suffix("_volatility"),
+    ]
+    if not growth_df.empty:
+        factor_frames.append(growth_df.add_suffix("_growth"))
+    if not quality_df.empty:
+        factor_frames.append(quality_df.add_suffix("_quality"))
+    factors_combined = pd.concat(factor_frames, axis=1)
     factors_combined.to_csv(processed_dir / "factors_combined.csv")
 
     sector_value_mean, sector_value_std = sector_mean(value_df, categorizations)
@@ -75,13 +96,18 @@ def factor_processing(
         volatility_df, categorizations
     )
     sector_dividend_mean, sector_dividend_std = sector_mean(dividend_df, categorizations)
-
-    for name, mean_df, std_df in [
+    sector_pairs = [
         ("momentum", sector_momentum_mean, sector_momentum_std),
         ("value", sector_value_mean, sector_value_std),
         ("volatility", sector_volatility_mean, sector_volatility_std),
         ("dividend", sector_dividend_mean, sector_dividend_std),
-    ]:
+    ]
+    if not growth_df.empty:
+        sector_pairs.append(("growth", *sector_mean(growth_df, categorizations)))
+    if not quality_df.empty:
+        sector_pairs.append(("quality", *sector_mean(quality_df, categorizations)))
+
+    for name, mean_df, std_df in sector_pairs:
         combined = pd.concat(
             {f"{s}_mean": mean_df[s] for s in mean_df.columns}
             | {f"{s}_std": std_df[s] for s in std_df.columns},

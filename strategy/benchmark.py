@@ -16,7 +16,7 @@ configure_ssl()
 import pandas as pd
 import yfinance as yf
 
-from analytics.performance import TRADING_DAYS, adjusted_sharpe, max_drawdown, sharpe_ratio
+from analytics.performance import TRADING_DAYS, adjusted_sharpe, max_drawdown, month_lead, sharpe_ratio
 
 
 class Benchmark:
@@ -38,9 +38,7 @@ class Benchmark:
         self.stats = self.summarize()
 
     def download_benchmark_data(self) -> pd.Series:
-        end = self.end_date or (pd.Timestamp.today() - pd.Timedelta(days=1)).strftime(
-            "%Y-%m-%d"
-        )
+        end = self.end_date or pd.Timestamp.today().normalize().strftime("%Y-%m-%d")
         data = yf.download(
             self.symbol,
             start=self.start_date,
@@ -163,7 +161,11 @@ class Benchmark:
         table["diff (strat - bm)"] = table["strategy"] - table["benchmark"]
         return table
 
-    def print_comparison(self, strategy_stats: pd.Series) -> pd.DataFrame:
+    def print_comparison(
+        self,
+        strategy_stats: pd.Series,
+        strategy_returns: pd.Series | None = None,
+    ) -> pd.DataFrame:
         table = self.compare(strategy_stats)
         pct_keys = {"total_return", "cagr", "vol", "max_drawdown", "win_rate"}
         print(f"\n=== Strategy vs {self.symbol} ===")
@@ -180,6 +182,20 @@ class Benchmark:
                     f"{self.symbol} {row['benchmark']:.2f} | "
                     f"diff {row['diff (strat - bm)']:+.2f}"
                 )
+        if strategy_returns is not None:
+            share, median = month_lead(strategy_returns, self.returns)
+            table.loc["months_ahead"] = {
+                "strategy": share,
+                "benchmark": float("nan"),
+                "diff (strat - bm)": float("nan"),
+            }
+            table.loc["median_month_excess"] = {
+                "strategy": median,
+                "benchmark": 0.0,
+                "diff (strat - bm)": median,
+            }
+            print(f"{'months_ahead':16s}: {share:.1%}")
+            print(f"{'median_month':16s}: {median:+.2%}")
         return table
 
 

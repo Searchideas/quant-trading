@@ -16,12 +16,13 @@ MARKET = os.environ.get("QUANT_MARKET", "us").lower()
 # Shared strategy knobs
 INITIAL_CAPITAL = 100_000.0
 MAX_SECTOR_WEIGHT = 1.0
-TOP_N_PER_SECTOR = 3
+TOP_N_PER_SECTOR = 2
 MOMENTUM_WEIGHT = 0
-VALUE_WEIGHT = 0.7
+VALUE_WEIGHT = 0.6
 VOLATILITY_WEIGHT = 0.1
-DIVIDEND_WEIGHT = 0.2
-COST_RATE = 0.000735  # 7.35 bps
+DIVIDEND_WEIGHT = 0.3
+GROWTH_WEIGHT = 0
+QUALITY_WEIGHT = 0
 US_UNIVERSE_SIZE = 100
 
 SG_TICKERS = [
@@ -49,13 +50,13 @@ class MarketConfig:
 MARKETS: dict[str, MarketConfig] = {
     "us": MarketConfig(
         key="us",
-        start_date="2024-08-01",
+        start_date="2017-01-01",
         benchmark_symbol="SPY",
         universe_csv=ROOT / "data" / "universes" / "US_Market.csv",
     ),
     "sg": MarketConfig(
         key="sg",
-        start_date="2024-08-01",
+        start_date="2021-09-01",  # ~5 years of history
         benchmark_symbol="ES3.SI",
         universe_csv=None,
     ),

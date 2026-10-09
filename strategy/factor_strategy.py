@@ -1,8 +1,16 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from paths import get_paths
+
+
+def _read_sector(processed_dir: Path, name: str) -> pd.DataFrame | None:
+    path = processed_dir / f"sector_{name}.csv"
+    if not path.exists():
+        return None
+    return pd.read_csv(path, index_col=0, parse_dates=True)
 
 
 def load_strategy_data(market: str | None = None) -> dict[str, pd.DataFrame | pd.Series]:
@@ -32,6 +40,8 @@ def load_strategy_data(market: str | None = None) -> dict[str, pd.DataFrame | pd
         "sector_dividend": pd.read_csv(
             processed_dir / "sector_dividend.csv", index_col=0, parse_dates=True
         ),
+        "sector_growth": _read_sector(processed_dir, "growth"),
+        "sector_quality": _read_sector(processed_dir, "quality"),
     }
 
 
@@ -42,6 +52,8 @@ def normalize_factors(
     sector_dividend,    # 4th
     sector_momentum,    # 5th
     sector_volatility,  # 6th
+    sector_growth=None,
+    sector_quality=None,
 ) -> tuple[pd.DataFrame, list[str]]:
     """Z-score each factor vs its sector mean/std."""
     sector_dfs = {
@@ -49,6 +61,8 @@ def normalize_factors(
         "momentum": sector_momentum,
         "volatility": sector_volatility,
         "dividend": sector_dividend,
+        "growth": sector_growth,
+        "quality": sector_quality,
     }
 
     normalized_cols: dict[str, pd.Series] = {}
@@ -58,7 +72,10 @@ def normalize_factors(
         ticker, factor = col.rsplit("_", 1)
         tickers.add(ticker)
         sector = categorizations.loc[ticker, "sector"]
-        sector_df = sector_dfs[factor]
+        sector_df = sector_dfs.get(factor)
+        if sector_df is None:
+            normalized_cols[col] = pd.Series(0.0, index=factors_combined.index)
+            continue
         mean_col = f"{sector}_mean"
         std_col = f"{sector}_std"
         normalized_cols[col] = (factors_combined[col] - sector_df[mean_col]) / sector_df[std_col]
@@ -81,6 +98,8 @@ def combine_final_score(
     value_weightage: float,
     volatility_weightage: float,
     dividend_weightage: float,
+    growth_weightage: float = 0.0,
+    quality_weightage: float = 0.0,
 ) -> pd.DataFrame:
     """Blend normalized factor z-scores into one score per ticker."""
     final_score = pd.DataFrame(index=normalized.index)
@@ -90,6 +109,8 @@ def combine_final_score(
             + value_weightage * _factor_zscore(normalized, ticker, "value")
             + volatility_weightage * _factor_zscore(normalized, ticker, "volatility")
             + dividend_weightage * _factor_zscore(normalized, ticker, "dividend")
+            + growth_weightage * _factor_zscore(normalized, ticker, "growth")
+            + quality_weightage * _factor_zscore(normalized, ticker, "quality")
         )
     return final_score.fillna(0)
 
@@ -101,10 +122,14 @@ def factor_strategy(
     sector_momentum: pd.DataFrame,
     sector_volatility: pd.DataFrame,
     sector_dividend: pd.DataFrame,
+    sector_growth: pd.DataFrame | None = None,
+    sector_quality: pd.DataFrame | None = None,
     momentum_weightage: float = 0.4,
     value_weightage: float = 0.3,
     volatility_weightage: float = 0.3,
     dividend_weightage: float = 0.0,
+    growth_weightage: float = 0.0,
+    quality_weightage: float = 0.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Z-score normalize factors by sector, then combine into a weighted final score."""
     normalized, tickers = normalize_factors(
@@ -114,9 +139,18 @@ def factor_strategy(
         sector_dividend,
         sector_momentum,
         sector_volatility,
+        sector_growth,
+        sector_quality,
     )
     final_score = combine_final_score(
-        normalized, tickers, momentum_weightage, value_weightage, volatility_weightage, dividend_weightage
+        normalized,
+        tickers,
+        momentum_weightage,
+        value_weightage,
+        volatility_weightage,
+        dividend_weightage,
+        growth_weightage,
+        quality_weightage,
     )
     return normalized, final_score
 
@@ -153,38 +187,57 @@ def select_sector_best_weights(
 
     ticker_to_sector = categorizations["sector"]
     stock_market_cap = categorizations["market_cap"]
-    sectors = sector_market_cap[sector_market_cap > 0].index
+    columns = list(final_score.columns)
+    position = {ticker: i for i, ticker in enumerate(columns)}
+    sector_members = []
+    for sector in sector_market_cap[sector_market_cap > 0].index:
+        members = [
+            position[ticker]
+            for ticker in ticker_to_sector[ticker_to_sector == sector].index
+            if ticker in position
+        ]
+        if members:
+            sector_members.append((sector, np.asarray(members, dtype=int)))
 
-    weights = pd.DataFrame(0.0, index=final_score.index, columns=final_score.columns)
-    current_weights = pd.Series(0.0, index=final_score.columns)
-    prev_selection: frozenset[str] | None = None
+    stock_caps = np.array(
+        [
+            float(stock_market_cap[ticker]) if ticker in stock_market_cap.index else np.nan
+            for ticker in columns
+        ],
+        dtype=float,
+    )
+    scores = final_score.to_numpy(dtype=float)
+    out = np.zeros(scores.shape, dtype=float)
+    current = np.zeros(scores.shape[1], dtype=float)
+    previous: tuple[int, ...] | None = None
 
-    for date in final_score.index:
-        day_scores = final_score.loc[date].dropna()
-        selected: dict[str, list[str]] = {}
-
-        for sector in sectors:
-            sector_tickers = ticker_to_sector[ticker_to_sector == sector].index.intersection(day_scores.index)
-            if sector_tickers.empty:
+    for i, row in enumerate(scores):
+        chosen: list[tuple[str, np.ndarray]] = []
+        chosen_ids: list[int] = []
+        for sector, members in sector_members:
+            values = row[members]
+            valid = np.flatnonzero(~np.isnan(values))
+            if valid.size == 0:
                 continue
-            top = day_scores[sector_tickers].nlargest(min(top_n_per_sector, len(sector_tickers))).index.tolist()
-            selected[sector] = top
+            order = np.argsort(-values[valid], kind="stable")
+            picked = members[valid[order[:top_n_per_sector]]]
+            chosen.append((sector, picked))
+            chosen_ids.extend(picked.tolist())
 
-        selection = frozenset(ticker for tickers in selected.values() for ticker in tickers)
-        if selection and selection != prev_selection:
-            prev_selection = selection
-            caps = sector_market_cap.loc[list(selected.keys())]
-            sector_w = _cap_sector_weights(caps / caps.sum(), max_sector_weight)
+        selection = tuple(sorted(chosen_ids))
+        if selection and selection != previous:
+            previous = selection
+            current = np.zeros(scores.shape[1], dtype=float)
+            sector_names = [sector for sector, _ in chosen]
+            sector_w = _cap_sector_weights(
+                sector_market_cap.loc[sector_names] / sector_market_cap.loc[sector_names].sum(),
+                max_sector_weight,
+            )
+            for sector, picked in chosen:
+                caps = np.nan_to_num(stock_caps[picked], nan=0.0)
+                if caps.sum() <= 0:
+                    caps = np.ones(len(picked))
+                current[picked] = float(sector_w.loc[sector]) * (caps / caps.sum())
+        out[i] = current
 
-            current_weights = pd.Series(0.0, index=final_score.columns)
-            for sector, tickers in selected.items():
-                stock_caps = stock_market_cap.loc[tickers].fillna(0)
-                if stock_caps.sum() <= 0:
-                    stock_caps = pd.Series(1.0, index=tickers)
-                cap_w = stock_caps / stock_caps.sum()
-                for ticker in tickers:
-                    current_weights[ticker] = sector_w[sector] * cap_w[ticker]
-
-        weights.loc[date] = current_weights
-
-    return weights
+    return pd.DataFrame(out, index=final_score.index, columns=final_score.columns)

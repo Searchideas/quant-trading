@@ -15,14 +15,12 @@ class BacktestEngine:
         prices: pd.DataFrame,
         weights: pd.DataFrame,
         initial_capital: float = 100_000.0,
-        cost_rate: float = 0.001,
     ):
         self.prices = prices
         self.weights = weights.reindex(
             index=prices.index, columns=prices.columns
         ).fillna(0.0)
         self.initial_capital = initial_capital
-        self.cost_rate = cost_rate
 
     def run(self) -> pd.DataFrame:
         returns = self.prices.pct_change()
@@ -33,10 +31,11 @@ class BacktestEngine:
         # equity before costs (to size notional)
         equity_gross = self.initial_capital * (1 + gross_return.fillna(0.0)).cumprod()
 
-        # costs from weight changes vs previous day
-        cost_sgd = calculate_costs(self.weights, equity_gross, self.cost_rate)
-        cost_pct = cost_sgd / equity_gross.shift(1).replace(0, pd.NA)
-        cost_pct = cost_pct.fillna(0.0)
+        prev_equity = equity_gross.shift(1)
+        if len(prev_equity):
+            prev_equity.iloc[0] = self.initial_capital
+        cost_sgd = calculate_costs(self.weights, prev_equity, self.prices)
+        cost_pct = (cost_sgd / prev_equity.replace(0, pd.NA)).fillna(0.0)
 
         net_return = gross_return.fillna(0.0) - cost_pct
         equity = self.initial_capital * (1 + net_return).cumprod()

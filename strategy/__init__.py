@@ -31,9 +31,10 @@ def run_strategy(
     value_weight: float | None = None,
     volatility_weight: float | None = None,
     dividend_weight: float | None = None,
+    growth_weight: float | None = None,
+    quality_weight: float | None = None,
     initial_capital: float | None = None,
     benchmark_symbol: str | None = None,
-    cost_rate: float | None = None,
 ) -> dict[str, pd.DataFrame]:
     market = normalize_market(market)
     mcfg = get_market_config(market)
@@ -55,10 +56,11 @@ def run_strategy(
     dividend_weight = (
         config.DIVIDEND_WEIGHT if dividend_weight is None else dividend_weight
     )
+    growth_weight = config.GROWTH_WEIGHT if growth_weight is None else growth_weight
+    quality_weight = config.QUALITY_WEIGHT if quality_weight is None else quality_weight
     initial_capital = (
         config.INITIAL_CAPITAL if initial_capital is None else initial_capital
     )
-    cost_rate = config.COST_RATE if cost_rate is None else cost_rate
     benchmark_symbol = benchmark_symbol or mcfg.benchmark_symbol
 
     data = load_strategy_data(market)
@@ -70,10 +72,14 @@ def run_strategy(
         data["sector_momentum"],
         data["sector_volatility"],
         data["sector_dividend"],
+        data["sector_growth"],
+        data["sector_quality"],
         momentum_weightage=momentum_weight,
         value_weightage=value_weight,
         volatility_weightage=volatility_weight,
         dividend_weightage=dividend_weight,
+        growth_weightage=growth_weight,
+        quality_weightage=quality_weight,
     )
 
     weights = select_sector_best_weights(
@@ -96,7 +102,6 @@ def run_strategy(
         data["price_data"],
         weights,
         initial_capital=initial_capital,
-        cost_rate=cost_rate,
     ).run()
     backtest.to_csv(processed_dir / "backtest_results.csv")
 
@@ -123,7 +128,7 @@ def run_strategy(
     stats = analytics_out["stats"]
     rebalance_table = analytics_out["rebalance_table"]
 
-    comparison = benchmark.print_comparison(stats)
+    comparison = benchmark.print_comparison(stats, backtest["return"])
     comparison.to_csv(processed_dir / "strategy_vs_benchmark.csv")
     print(f"\nSaved comparison to {processed_dir / 'strategy_vs_benchmark.csv'}")
 
