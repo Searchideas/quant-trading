@@ -169,6 +169,25 @@ def _cap_sector_weights(raw: pd.Series, max_weight: float = 0.35) -> pd.Series:
     return weights
 
 
+def listed_span(prices: pd.DataFrame) -> pd.DataFrame:
+    """True only between a name's first and last real price, inclusive.
+
+    A blank before the first print means the name does not exist yet.
+    A blank after the last print means it is gone. A hole in between does not.
+    """
+    has_price = prices.notna()
+    started = has_price.cummax()
+    still_listed = has_price.iloc[::-1].cummax().iloc[::-1]
+    return started & still_listed
+
+
+def hide_unlisted(score: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+    """Drop a score where the name has no listed history yet or any longer."""
+    listed = listed_span(prices).reindex(index=score.index, columns=score.columns)
+    listed = listed.fillna(False).astype(bool)
+    return score.where(listed)
+
+
 def select_sector_best_weights(
     final_score: pd.DataFrame,
     categorizations: pd.DataFrame,

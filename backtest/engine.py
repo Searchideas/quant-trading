@@ -23,7 +23,7 @@ class BacktestEngine:
         self.initial_capital = initial_capital
 
     def run(self) -> pd.DataFrame:
-        returns = self.prices.pct_change()
+        returns = self.prices.pct_change(fill_method=None)
         held = self.weights.shift(1)  # no lookahead
 
         gross_return = (held * returns).sum(axis=1)

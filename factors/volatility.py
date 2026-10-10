@@ -8,8 +8,8 @@ class VolatilityFactor:
         self.price_data = price_data
 
     def calculate_volatility(self, lookback: int = 30) -> pd.DataFrame:
-        prices = self.price_data.ffill().bfill()
-        returns = prices.pct_change()
-        volatility = returns.rolling(window=lookback).std()
-        volatility = volatility.iloc[lookback - 1 :]
-        return 1 / volatility
+        # Missing prices stay missing. Filling them backward invents a history.
+        returns = self.price_data.pct_change(fill_method=None)
+        volatility = returns.rolling(window=lookback, min_periods=lookback).std()
+        inverse = 1 / volatility
+        return inverse.replace([float("inf"), float("-inf")], pd.NA)

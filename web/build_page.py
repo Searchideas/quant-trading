@@ -28,6 +28,8 @@ from strategy.benchmark import Benchmark
 from strategy.factor_strategy import (
     load_strategy_data,
     normalize_factors,
+    hide_unlisted,
+    listed_span,
     select_sector_best_weights,
 )
 
@@ -262,6 +264,8 @@ def main() -> None:
         else:
             last_key = key
     score = stitch_scores(parts, normalized.index, tickers, keys, CHOSEN)
+    prices = data["price_data"].reindex(index=score.index, columns=score.columns)
+    score = hide_unlisted(score, prices)
     book = select_sector_best_weights(
         score,
         data["categorizations"],
@@ -269,7 +273,10 @@ def main() -> None:
         max_sector_weight=1.0,
         top_n_per_sector=2,
     )
-    prices = data["price_data"].reindex(normalized.index)
+    listed = listed_span(prices).reindex(index=book.index, columns=book.columns).fillna(False)
+    held_unlisted = book.where(~listed).fillna(0.0)
+    if (held_unlisted > 0).any().any():
+        raise SystemExit("The book holds a name before it lists or after it is gone.")
     result = BacktestEngine(prices, book, initial_capital=100_000.0).run()
     equity = result["equity"]
     equity = equity[equity.index >= "2017-01-01"]

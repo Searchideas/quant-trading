@@ -16,6 +16,7 @@ from paths import ensure_market_dirs
 from strategy.benchmark import Benchmark
 from strategy.factor_strategy import (
     factor_strategy,
+    hide_unlisted,
     load_strategy_data,
     select_sector_best_weights,
 )
@@ -82,6 +83,7 @@ def run_strategy(
         quality_weightage=quality_weight,
     )
 
+    final_score = hide_unlisted(final_score, data["price_data"])
     weights = select_sector_best_weights(
         final_score,
         data["categorizations"],
