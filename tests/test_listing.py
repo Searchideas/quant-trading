@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
+import pytest
 
+from backtest.engine import BacktestEngine
 from factors.momentum import MomentumFactor
+from factors.value import ValueFactor
 from factors.volatility import VolatilityFactor
 from strategy.factor_strategy import hide_unlisted, listed_span
 
@@ -26,3 +29,29 @@ def test_unlisted_score_cannot_be_selected():
     hidden = hide_unlisted(score, prices)
     assert hidden["SPCX"].iloc[:2].isna().all()
     assert listed_span(prices)["SPCX"].tolist() == [False, False, True, True]
+
+
+def test_book_value_is_unused_until_forty_days_after_quarter_end():
+    book = pd.DataFrame(
+        {"AAA": [10.0, 20.0]},
+        index=pd.to_datetime(["2020-03-31", "2020-06-30"]),
+    )
+    prices = pd.DataFrame(
+        {"AAA": 100.0},
+        index=pd.bdate_range("2020-03-31", "2020-08-14"),
+    )
+    value = ValueFactor(prices, book).calculate_value_factor()
+    assert pd.isna(value.loc["2020-05-08", "AAA"])
+    assert value.loc["2020-05-11", "AAA"] == pytest.approx(0.1)
+    assert value.loc["2020-08-07", "AAA"] == pytest.approx(0.1)
+    assert value.loc["2020-08-10", "AAA"] == pytest.approx(0.2)
+
+
+def test_the_signal_close_does_not_earn_the_next_move():
+    dates = pd.to_datetime(["2026-10-05", "2026-10-06", "2026-10-07"])
+    prices = pd.DataFrame({"AAA": [100.0, 110.0, 121.0]}, index=dates)
+    weights = pd.DataFrame({"AAA": [1.0, 1.0, 1.0]}, index=dates)
+    result = BacktestEngine(prices, weights, initial_capital=100).run()
+    assert result.loc[dates[0], "gross_return"] == 0
+    assert result.loc[dates[1], "gross_return"] == 0
+    assert result.loc[dates[2], "gross_return"] == pytest.approx(0.10)

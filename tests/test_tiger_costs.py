@@ -42,7 +42,8 @@ def test_opening_book_pays_the_buy_fee():
     prices = pd.DataFrame({"AAA": [100.0, 100.0]}, index=dates)
     weights = pd.DataFrame({"AAA": [1.0, 1.0]}, index=dates)
     result = BacktestEngine(prices, weights, initial_capital=400).run()
-    opening_fee = order_fee(4, 400, "buy", dates[0])
-    assert result.loc[dates[0], "cost_sgd"] == pytest.approx(opening_fee)
-    assert result.loc[dates[0], "return"] == pytest.approx(-opening_fee / 400)
-    assert result.loc[dates[1], "cost_sgd"] == 0
+    opening_fee = order_fee(4, 400, "buy", dates[1])
+    assert result.loc[dates[0], "cost_sgd"] == 0
+    assert result.loc[dates[0], "gross_return"] == 0
+    assert result.loc[dates[1], "cost_sgd"] == pytest.approx(opening_fee)
+    assert result.loc[dates[1], "return"] == pytest.approx(-opening_fee / 400)

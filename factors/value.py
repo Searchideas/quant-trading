@@ -2,6 +2,8 @@
 
 import pandas as pd
 
+from factors.fundamentals import QUARTERLY_FILING_LAG_DAYS
+
 
 class ValueFactor:
     def __init__(self, price_data: pd.DataFrame, book_data: pd.DataFrame):
@@ -9,12 +11,18 @@ class ValueFactor:
         self.book_data = book_data
 
     def prepare_book_data(self) -> pd.DataFrame:
-        """Forward-fill quarterly book value per share for daily prices."""
+        """Carry book value forward only after a filing lag.
+
+        Yahoo dates the figure on the quarter-end. That report is not public
+        on the quarter-end, so it stays unused for 40 days and is never
+        filled backward.
+        """
         book_data = self.book_data.copy()
-        book_data.index = pd.to_datetime(book_data.index)
+        book_data.index = pd.to_datetime(book_data.index) + pd.Timedelta(
+            days=QUARTERLY_FILING_LAG_DAYS
+        )
         book_data = book_data.sort_index()
-        book_data = book_data.ffill()
-        return book_data
+        return book_data.groupby(level=0).last()
 
     def calculate_pb(self) -> pd.DataFrame:
         """Return book yield = 1 / (Price / Book)."""

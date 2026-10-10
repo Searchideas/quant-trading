@@ -24,7 +24,10 @@ class BacktestEngine:
 
     def run(self) -> pd.DataFrame:
         returns = self.prices.pct_change(fill_method=None)
-        held = self.weights.shift(1)  # no lookahead
+        # The row is the signal at that close. The order is filled at the next
+        # close, and that fill earns the close after that.
+        filled = self.weights.shift(1).fillna(0.0)
+        held = self.weights.shift(2).fillna(0.0)
 
         gross_return = (held * returns).sum(axis=1)
 
@@ -34,7 +37,7 @@ class BacktestEngine:
         prev_equity = equity_gross.shift(1)
         if len(prev_equity):
             prev_equity.iloc[0] = self.initial_capital
-        cost_sgd = calculate_costs(self.weights, prev_equity, self.prices)
+        cost_sgd = calculate_costs(filled, prev_equity, self.prices)
         cost_pct = (cost_sgd / prev_equity.replace(0, pd.NA)).fillna(0.0)
 
         net_return = gross_return.fillna(0.0) - cost_pct
