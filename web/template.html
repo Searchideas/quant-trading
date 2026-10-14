@@ -96,12 +96,15 @@
     <p class="note">CAGR is the compounded annual rate from the first close to the latest close, using the count of daily returns divided by 252. Sharpe is the mean daily return divided by its standard deviation, times the square root of 252. Sortino uses the same mean and the same annualization, and divides by the downside deviation: the square root of the mean squared return on days below zero, with up days counted as zero. Maximum drawdown is the deepest peak-to-trough on the equity path. Calmar is CAGR divided by the absolute maximum drawdown. The book is after the Tiger cost schedule. SPY is not. These mixes were chosen on the same history.</p>
     <div class="scroll"><table id="scorecard"></table></div>
     <p class="note" id="months-ahead"></p>
+    <h2>Market model</h2>
+    <p class="note">Each daily book return is alpha plus beta times that day's S&amp;P 500 return, plus a remainder. Alpha per year is the daily alpha times 252. The standard error and the t-statistic say how uncertain that alpha is. The 95% range is 1.96 standard errors on either side. A range that crosses zero means the alpha is not distinguishable from noise. Unexplained volatility is the annualized size of the remainder. The information ratio is alpha per year divided by that volatility. The book return is after the Tiger cost schedule. These mixes were chosen on the same history.</p>
+    <div class="scroll"><table id="market"></table></div>
     <h2>Time regions</h2>
     <p class="note">Each block is one leaf, from the prior month-end to this period's month-end. A red block lagged SPY. The mix is momentum / value / dividend / low volatility. The line below is every session.</p>
     <div id="strip" class="bar"></div>
     <table id="periods"></table>
     <h2>Year by year against the S&amp;P 500</h2>
-    <p class="note">2017 starts at the first close in the file. Each later year runs from the prior year-end close to that year's last close. A finished year's return is that year's growth, so it is not repeated as a second CAGR. Sharpe, Sortino, and volatility use that year's daily returns and the same definitions as the full path. Maximum drawdown is measured inside the year, including the move off the prior year-end close. 2026 is through the latest close, not a finished year.</p>
+    <p class="note">2017 starts at the first close in the file. Each later year runs from the prior year-end close to that year's last close. A finished year's return is that year's growth, so it is not repeated as a second CAGR. Sharpe, Sortino, and volatility use that year's daily returns and the same definitions as the full path. Maximum drawdown is measured inside the year, including the move off the prior year-end close. Beta, alpha, and the information ratio use that year's daily book return and that year's S&amp;P 500 return in the same market model as the full path. The number in parentheses is the t-statistic of that year's alpha. 2026 is through the latest close, not a finished year.</p>
     <div class="scroll"><table id="years"></table></div>
     <h2>Growth of 100, daily close</h2>
     <p class="note">The vertical scale is growth of 100, logarithmic, rebased at the first close. Click the line for that session's target book.</p>
@@ -270,13 +273,22 @@ function init() {
   });
   scorecard.appendChild(scoreBody);
   document.getElementById("months-ahead").textContent = DATA.monthsAhead;
+  const market = document.getElementById("market");
+  market.innerHTML = "<thead><tr><th>Metric</th><th class='num'>Value</th></tr></thead>";
+  const marketBody = document.createElement("tbody");
+  DATA.market.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + row.metric + "</td><td class='num'>" + row.value + "</td>";
+    marketBody.appendChild(tr);
+  });
+  market.appendChild(marketBody);
   const years = document.getElementById("years");
-  years.innerHTML = "<thead><tr><th rowspan='2'>Year</th><th class='num' colspan='3'>Return</th><th class='num' colspan='2'>Sharpe</th><th class='num' colspan='2'>Sortino</th><th class='num' colspan='2'>Maximum drawdown</th><th class='num' colspan='2'>Volatility</th></tr><tr><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Excess</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th></tr></thead>";
+  years.innerHTML = "<thead><tr><th rowspan='2'>Year</th><th class='num' colspan='3'>Return</th><th class='num' colspan='2'>Sharpe</th><th class='num' colspan='2'>Sortino</th><th class='num' colspan='2'>Maximum drawdown</th><th class='num' colspan='2'>Volatility</th><th class='num' rowspan='2'>Beta</th><th class='num' rowspan='2'>Alpha</th><th class='num' rowspan='2'>Information ratio</th></tr><tr><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Excess</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th><th class='num'>Book</th><th class='num'>S&amp;P 500</th></tr></thead>";
   const yearBody = document.createElement("tbody");
   DATA.years.forEach((year) => {
     const tr = document.createElement("tr");
     if (year.lag) tr.className = "lag";
-    tr.innerHTML = "<td>" + year.label + "</td><td class='num'>" + year.book + "</td><td class='num'>" + year.spy + "</td><td class='num'>" + year.gap + "</td><td class='num'>" + year.bookSharpe + "</td><td class='num'>" + year.spySharpe + "</td><td class='num'>" + year.bookSortino + "</td><td class='num'>" + year.spySortino + "</td><td class='num'>" + year.bookDd + "</td><td class='num'>" + year.spyDd + "</td><td class='num'>" + year.bookVol + "</td><td class='num'>" + year.spyVol + "</td>";
+    tr.innerHTML = "<td>" + year.label + "</td><td class='num'>" + year.book + "</td><td class='num'>" + year.spy + "</td><td class='num'>" + year.gap + "</td><td class='num'>" + year.bookSharpe + "</td><td class='num'>" + year.spySharpe + "</td><td class='num'>" + year.bookSortino + "</td><td class='num'>" + year.spySortino + "</td><td class='num'>" + year.bookDd + "</td><td class='num'>" + year.spyDd + "</td><td class='num'>" + year.bookVol + "</td><td class='num'>" + year.spyVol + "</td><td class='num'>" + year.beta + "</td><td class='num'>" + year.alpha + "</td><td class='num'>" + year.ratio + "</td>";
     yearBody.appendChild(tr);
   });
   years.appendChild(yearBody);

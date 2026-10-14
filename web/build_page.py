@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 
 from analytics.four_leaf_search import leaf_keys
+from analytics.performance import market_regression
 from analytics.leaf_weight_search import factor_matrix, stitch_scores
 from analytics.regime_backtest import load_states_from_pages
 from analytics.yield_regime import assign_leaves, load_states
@@ -86,6 +87,55 @@ def plain_pct(value: float) -> str:
     return f"{int(round(value * 100))}%"
 
 
+def _signed_pct(value: float, digits: int = 1) -> str:
+    if value is None or not np.isfinite(value):
+        return "—"
+    return f"{value * 100:+.{digits}f}%"
+
+
+def _model_cells(strategy: pd.Series, market: pd.Series) -> dict[str, str]:
+    """Beta, annualized alpha with its t-statistic, and the information ratio."""
+    fit = market_regression(strategy, market)
+    if not np.isfinite(fit["beta"]):
+        return {"beta": "—", "alpha": "—", "ratio": "—"}
+    t_stat = fit["alpha_t"]
+    alpha = _signed_pct(float(fit["alpha_annualized"]))
+    if np.isfinite(t_stat):
+        alpha = f"{alpha} (t {t_stat:.1f})"
+    ratio = fit["information_ratio"]
+    return {
+        "beta": _num(float(fit["beta"])),
+        "alpha": alpha,
+        "ratio": _num(float(ratio)) if np.isfinite(ratio) else "—",
+    }
+
+
+def market_table(strategy: pd.Series, market: pd.Series) -> list[dict]:
+    """Full-path market model. Alpha is annualized and its range is 1.96 standard errors."""
+    fit = market_regression(strategy, market)
+    if not np.isfinite(fit["beta"]):
+        return []
+    t_stat = fit["alpha_t"]
+    t_text = f"{t_stat:.2f}" if np.isfinite(t_stat) else "—"
+    ratio = fit["information_ratio"]
+    return [
+        {"metric": "Beta", "value": f"{fit['beta']:.2f} (se {fit['beta_se']:.2f})"},
+        {
+            "metric": "Alpha per year",
+            "value": (
+                f"{_signed_pct(float(fit['alpha_annualized']))} "
+                f"(se {abs(float(fit['alpha_annualized_se'])) * 100:.1f}%, t {t_text})"
+            ),
+        },
+        {
+            "metric": "Alpha, 95% range",
+            "value": f"{_signed_pct(float(fit['alpha_low']))} to {_signed_pct(float(fit['alpha_high']))}",
+        },
+        {"metric": "Unexplained volatility", "value": plain_pct(float(fit["residual_vol"]))},
+        {"metric": "Information ratio", "value": _num(float(ratio)) if np.isfinite(ratio) else "—"},
+    ]
+
+
 def _num(value: float, digits: int = 2) -> str:
     if value is None or not np.isfinite(value):
         return "—"
@@ -141,6 +191,7 @@ def build_years(equity: pd.Series, spy: pd.Series) -> list[dict]:
         gap_pp = round((book_ret - spy_ret) * 100, 1)
         book_risk = _risk(book_daily.loc[mask])
         spy_risk = _risk(spy_daily.loc[mask])
+        fitted = _model_cells(book_daily.loc[mask], spy_daily.loc[mask])
         partial = year == last_year and last_month < 12
         rows.append(
             {
@@ -156,6 +207,9 @@ def build_years(equity: pd.Series, spy: pd.Series) -> list[dict]:
                 "spyDd": pct(_drawdown(pd.concat([pd.Series([spy_start]), spy_path]))),
                 "bookVol": plain_pct(book_risk["vol"]),
                 "spyVol": plain_pct(spy_risk["vol"]),
+                "beta": fitted["beta"],
+                "alpha": fitted["alpha"],
+                "ratio": fitted["ratio"],
                 "lag": gap_pp < 0,
             }
         )
@@ -327,6 +381,7 @@ def main() -> None:
     periods = build_periods(equity, spy, day_keys)
     years = build_years(equity, spy)
     scorecard, months_ahead = build_scorecard(equity, spy)
+    model = market_table(equity.pct_change(), spy.pct_change())
     payload = {
         "built": pd.Timestamp.today().strftime("%Y-%m-%d"),
         "dates": dates,
@@ -343,6 +398,7 @@ def main() -> None:
         "periods": periods,
         "years": years,
         "scorecard": scorecard,
+        "market": model,
         "monthsAhead": months_ahead,
         "statBook": pct(growth_book[-1] / growth_book[0] - 1.0),
         "statSpy": pct(growth_spy[-1] / growth_spy[0] - 1.0),

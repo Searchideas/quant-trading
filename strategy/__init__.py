@@ -9,6 +9,7 @@ import pandas as pd
 
 import config
 from analytics import run_analytics
+from analytics.performance import market_regression
 from backtest.engine import BacktestEngine
 from backtest.portfolio import Portfolio
 from config import get_market_config, normalize_market
@@ -133,6 +134,25 @@ def run_strategy(
     comparison = benchmark.print_comparison(stats, backtest["return"])
     comparison.to_csv(processed_dir / "strategy_vs_benchmark.csv")
     print(f"\nSaved comparison to {processed_dir / 'strategy_vs_benchmark.csv'}")
+
+    fit = market_regression(backtest["return"], benchmark.returns)
+    fit.to_csv(processed_dir / "market_model.csv", header=["value"])
+    print(f"\n=== Market model: return = alpha + beta x {benchmark_symbol} + unexplained ===")
+    t_stat = fit["alpha_t"]
+    t_text = f"{t_stat:.2f}" if pd.notna(t_stat) else "undefined"
+    ratio = fit["information_ratio"]
+    ratio_text = f"{ratio:.2f}" if pd.notna(ratio) else "undefined"
+    print(f"{'days':22s}: {int(fit['days'])}")
+    print(f"{'beta':22s}: {fit['beta']:.2f}  (se {fit['beta_se']:.2f})")
+    print(
+        f"{'alpha, per year':22s}: {fit['alpha_annualized']:+.2%}  "
+        f"(se {fit['alpha_annualized_se']:.2%}, t {t_text})"
+    )
+    print(
+        f"{'alpha, 95% range':22s}: {fit['alpha_low']:+.2%} to {fit['alpha_high']:+.2%}"
+    )
+    print(f"{'unexplained vol':22s}: {fit['residual_vol']:.2%}")
+    print(f"{'information ratio':22s}: {ratio_text}  (alpha per year / unexplained vol)")
 
     rebalance_days = (weights.diff().abs().sum(axis=1) > 0).sum()
     print(f"\n[{market}] Final score: {final_score.shape} | Weights: {weights.shape}")
