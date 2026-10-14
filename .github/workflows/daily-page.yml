@@ -2,8 +2,10 @@ name: Daily book page
 
 on:
   schedule:
-    # 22:00 UTC is after the US cash close in both summer and winter.
-    - cron: "0 22 * * 1-5"
+    # 00:10 UTC Tue-Sat is 08:10 SGT. Yahoo's end date is exclusive and the
+    # runner's clock is UTC, so the job has to start after midnight UTC to
+    # include the US session that closed the previous evening.
+    - cron: "10 0 * * 2-6"
   workflow_dispatch:
 
 permissions:
