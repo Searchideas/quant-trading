@@ -11,9 +11,14 @@ class DividendFactor:
     def prepare_dividend_data(self) -> pd.DataFrame:
         """Forward-fill last dividend payment onto daily price dates."""
         div = self.dividend_data.copy()
-        div.index = pd.to_datetime(div.index,utc=True)
+        div.index = pd.to_datetime(div.index, utc=True)
         div.index = div.index.tz_convert(None).normalize()
         div = div.sort_index()
+        # Another company's payment date is a blank row for this stock.
+        # Carry the last real payment across those blanks, never backward.
+        div = div.ffill()
+        if div.index.has_duplicates:
+            div = div.groupby(level=0).last()
         return div.reindex(self.price_data.index, method="ffill")
 
     def calculate_dividend_yield(self) -> pd.DataFrame:

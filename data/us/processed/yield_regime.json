@@ -1,0 +1,289 @@
+{
+  "latest_month": "2026-08",
+  "latest_yield_2y": 4.22,
+  "latest_yield": 4.6,
+  "latest_credit": 0.4300000000000006,
+  "current_leaf": "High 2-year yield, high 10-year yield, tight credit",
+  "leaves": [
+    {
+      "name": "Low 2-year yield, low 10-year yield, tight credit",
+      "high_2y": false,
+      "high_yield": false,
+      "wide_credit": false,
+      "discovery": {
+        "months": 301,
+        "mean_monthly_pct": {
+          "value": 0.35186046511627905,
+          "dividend": 0.14847176079734217,
+          "low_volatility": 0.5588039867109634
+        },
+        "mean_annual_pct": {
+          "value": 4.222325581395348,
+          "dividend": 1.7816611295681062,
+          "low_volatility": 6.705647840531562
+        },
+        "winner": "low_volatility",
+        "donor": "dividend"
+      },
+      "confirmation": {
+        "months": 18,
+        "mean_monthly_pct": {
+          "value": 0.9738888888888889,
+          "dividend": -0.1127777777777778,
+          "low_volatility": 1.818888888888889
+        },
+        "mean_annual_pct": {
+          "value": 11.686666666666667,
+          "dividend": -1.3533333333333335,
+          "low_volatility": 21.826666666666668
+        },
+        "winner": "low_volatility",
+        "donor": "dividend"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "Low 2-year yield, low 10-year yield, wide credit",
+      "high_2y": false,
+      "high_yield": false,
+      "wide_credit": true,
+      "discovery": {
+        "months": 126,
+        "mean_monthly_pct": {
+          "value": 0.12658730158730153,
+          "dividend": -0.08246031746031746,
+          "low_volatility": -0.4957142857142858
+        },
+        "mean_annual_pct": {
+          "value": 1.5190476190476183,
+          "dividend": -0.9895238095238095,
+          "low_volatility": -5.948571428571429
+        },
+        "winner": "value",
+        "donor": "low_volatility"
+      },
+      "confirmation": {
+        "months": 15,
+        "mean_monthly_pct": {
+          "value": -0.7646666666666666,
+          "dividend": -1.088666666666667,
+          "low_volatility": -2.0786666666666664
+        },
+        "mean_annual_pct": {
+          "value": -9.175999999999998,
+          "dividend": -13.064000000000004,
+          "low_volatility": -24.943999999999996
+        },
+        "winner": "value",
+        "donor": "low_volatility"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "Low 2-year yield, high 10-year yield, tight credit",
+      "high_2y": false,
+      "high_yield": true,
+      "wide_credit": false,
+      "discovery": null,
+      "confirmation": null,
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "Low 2-year yield, high 10-year yield, wide credit",
+      "high_2y": false,
+      "high_yield": true,
+      "wide_credit": true,
+      "discovery": null,
+      "confirmation": null,
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "High 2-year yield, low 10-year yield, tight credit",
+      "high_2y": true,
+      "high_yield": false,
+      "wide_credit": false,
+      "discovery": {
+        "months": 6,
+        "mean_monthly_pct": {
+          "value": 2.2100000000000004,
+          "dividend": 0.17166666666666677,
+          "low_volatility": 5.226666666666667
+        },
+        "mean_annual_pct": {
+          "value": 26.520000000000003,
+          "dividend": 2.0600000000000014,
+          "low_volatility": 62.72
+        },
+        "winner": "low_volatility",
+        "donor": "dividend"
+      },
+      "confirmation": {
+        "months": 27,
+        "mean_monthly_pct": {
+          "value": -0.11111111111111124,
+          "dividend": -0.6162962962962962,
+          "low_volatility": 0.8225925925925927
+        },
+        "mean_annual_pct": {
+          "value": -1.3333333333333348,
+          "dividend": -7.395555555555555,
+          "low_volatility": 9.871111111111112
+        },
+        "winner": "low_volatility",
+        "donor": "dividend"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "High 2-year yield, low 10-year yield, wide credit",
+      "high_2y": true,
+      "high_yield": false,
+      "wide_credit": true,
+      "discovery": {
+        "months": 23,
+        "mean_monthly_pct": {
+          "value": 1.1143478260869566,
+          "dividend": 0.7443478260869566,
+          "low_volatility": 0.17347826086956528
+        },
+        "mean_annual_pct": {
+          "value": 13.37217391304348,
+          "dividend": 8.93217391304348,
+          "low_volatility": 2.081739130434783
+        },
+        "winner": "value",
+        "donor": "low_volatility"
+      },
+      "confirmation": {
+        "months": 11,
+        "mean_monthly_pct": {
+          "value": -0.5472727272727271,
+          "dividend": 0.6963636363636363,
+          "low_volatility": 0.8936363636363635
+        },
+        "mean_annual_pct": {
+          "value": -6.567272727272726,
+          "dividend": 8.356363636363636,
+          "low_volatility": 10.723636363636361
+        },
+        "winner": "low_volatility",
+        "donor": "value"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "High 2-year yield, high 10-year yield, tight credit",
+      "high_2y": true,
+      "high_yield": true,
+      "wide_credit": false,
+      "discovery": {
+        "months": 2,
+        "mean_monthly_pct": {
+          "value": -4.44,
+          "dividend": -3.3150000000000004,
+          "low_volatility": -15.110000000000001
+        },
+        "mean_annual_pct": {
+          "value": -53.28,
+          "dividend": -39.78,
+          "low_volatility": -181.32000000000002
+        },
+        "winner": "dividend",
+        "donor": "low_volatility"
+      },
+      "confirmation": {
+        "months": 43,
+        "mean_monthly_pct": {
+          "value": 0.1644186046511628,
+          "dividend": -0.006511627906976678,
+          "low_volatility": -1.0327906976744188
+        },
+        "mean_annual_pct": {
+          "value": 1.9730232558139535,
+          "dividend": -0.07813953488372014,
+          "low_volatility": -12.393488372093024
+        },
+        "winner": "value",
+        "donor": "low_volatility"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    },
+    {
+      "name": "High 2-year yield, high 10-year yield, wide credit",
+      "high_2y": true,
+      "high_yield": true,
+      "wide_credit": true,
+      "discovery": {
+        "months": 4,
+        "mean_monthly_pct": {
+          "value": -1.2325,
+          "dividend": 2.3499999999999996,
+          "low_volatility": 3.1225000000000005
+        },
+        "mean_annual_pct": {
+          "value": -14.79,
+          "dividend": 28.199999999999996,
+          "low_volatility": 37.470000000000006
+        },
+        "winner": "low_volatility",
+        "donor": "value"
+      },
+      "confirmation": {
+        "months": 26,
+        "mean_monthly_pct": {
+          "value": -0.4111538461538461,
+          "dividend": -0.6276923076923079,
+          "low_volatility": -1.5942307692307693
+        },
+        "mean_annual_pct": {
+          "value": -4.933846153846153,
+          "dividend": -7.532307692307695,
+          "low_volatility": -19.130769230769232
+        },
+        "winner": "value",
+        "donor": "low_volatility"
+      },
+      "kept": false,
+      "weights": {
+        "value": 0.6,
+        "dividend": 0.3,
+        "low_volatility": 0.1
+      }
+    }
+  ]
+}

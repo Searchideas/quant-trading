@@ -1,0 +1,12 @@
+date,predicted_tracking_error,active_gross,leaf,mix
+2021-09-17,2.1983234844281136e-17,1.0148132334464322e-16,Before the yield history is long enough,0 / 40 / 0 / 60
+2022-03-18,0.005494555696385776,0.023430446152358814,Before the yield history is long enough,0 / 40 / 0 / 60
+2022-09-16,1.7893961293540153e-17,8.109832250191573e-17,Before the yield history is long enough,0 / 40 / 0 / 60
+2023-03-17,0.004790335184947347,0.023226920679907608,Before the yield history is long enough,0 / 40 / 0 / 60
+2023-09-15,1.5661885619247242e-17,7.45931094670027e-17,Before the yield history is long enough,0 / 40 / 0 / 60
+2024-03-15,0.0,0.0,"High 10-year, tight credit",0 / 0 / 0 / 100
+2024-09-20,0.0,0.0,"Low 10-year, tight credit",100 / 0 / 0 / 0
+2025-03-21,0.0,0.0,"Low 10-year, tight credit",100 / 0 / 0 / 0
+2025-09-19,0.001760073408443687,0.01075931130876439,"Low 10-year, tight credit",100 / 0 / 0 / 0
+2026-03-20,2.2008743368641266e-17,7.806255641895632e-17,"Low 10-year, tight credit",100 / 0 / 0 / 0
+2026-09-18,0.0,0.0,"Low 10-year, tight credit",100 / 0 / 0 / 0

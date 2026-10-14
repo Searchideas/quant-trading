@@ -22,6 +22,9 @@ class ValueFactor:
             days=QUARTERLY_FILING_LAG_DAYS
         )
         book_data = book_data.sort_index()
+        # A later row often belongs to another company and is blank here.
+        # Fill the last real figure before collapsing duplicate dates.
+        book_data = book_data.ffill()
         return book_data.groupby(level=0).last()
 
     def calculate_pb(self) -> pd.DataFrame:

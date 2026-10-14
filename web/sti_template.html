@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STI book with a capped yield tree</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #1c1917;
+    --muted: #57534e;
+    --line: #e7e5e4;
+    --paper: #fafaf9;
+    --card: #ffffff;
+    --accent: #1d4e89;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 Georgia, "Iowan Old Style", "Palatino Linotype", serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 32px; line-height: 1.2; font-weight: 600; margin: 0 0 8px; }
+  h2 { font-size: 22px; font-weight: 600; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; }
+  .lede { font-size: 18px; }
+  .note { color: var(--muted); font: 13px/1.45 system-ui, sans-serif; }
+  .stats { display: flex; flex-wrap: wrap; gap: 18px 28px; margin: 8px 0 18px; }
+  .stat b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+  .stat span { color: var(--muted); font: 13px/1.3 system-ui, sans-serif; }
+  table { width: 100%; border-collapse: collapse; font: 14px/1.4 system-ui, sans-serif; margin: 8px 0 16px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.formula { font-family: "Cambria Math", Georgia, serif; font-style: italic; white-space: nowrap; }
+  tr.click td { cursor: pointer; }
+  tr.click:hover td { background: #f5f5f4; }
+  tr.on td { background: #eef3f8; }
+  svg.chart { width: 100%; height: auto; display: block; cursor: crosshair; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  button { font: 15px/1.2 system-ui, sans-serif; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .scroll { overflow-x: auto; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .card b { display: block; font: 20px/1.2 system-ui, sans-serif; font-weight: 600; margin-top: 2px; }
+  .card span, .leaf span { color: var(--muted); font: 13px/1.35 system-ui, sans-serif; }
+  .tree-wrap { overflow-x: auto; margin: 8px 0 14px; }
+  .dtree, .dtree ul { display: flex; justify-content: center; list-style: none; margin: 0; padding: 0; position: relative; }
+  .dtree ul { padding-top: 22px; }
+  .dtree li { display: flex; flex-direction: column; align-items: center; position: relative; padding: 22px 8px 0; list-style: none; }
+  .dtree li::before, .dtree li::after { content: ""; position: absolute; top: 0; width: 50%; height: 22px; border-top: 1.5px solid #d6d3d1; }
+  .dtree li::before { right: 50%; }
+  .dtree li::after { left: 50%; border-left: 1.5px solid #d6d3d1; }
+  .dtree li:first-child::before, .dtree li:last-child::after { border: 0 none; }
+  .dtree li:last-child::before { border-right: 1.5px solid #d6d3d1; border-radius: 0 8px 0 0; }
+  .dtree li:first-child::after { border-radius: 8px 0 0 0; }
+  .dtree li:only-child { padding-top: 0; }
+  .dtree li:only-child::before, .dtree li:only-child::after { display: none; }
+  .dtree ul::before { content: ""; position: absolute; top: 0; left: 50%; border-left: 1.5px solid #d6d3d1; height: 22px; }
+  .dtree li.on::before, .dtree li.on::after, .dtree li.on:last-child::before { border-color: var(--accent); }
+  .dtree li.on > ul::before { border-left-color: var(--accent); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 112px; max-width: 168px; font: 13px/1.35 system-ui, sans-serif; }
+  .box b { display: block; font-size: 14px; }
+  .box span { display: block; color: var(--muted); margin-top: 2px; }
+  .dtree.has-path .box { opacity: 0.45; }
+  .dtree.has-path li.on > .box { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29, 78, 137, 0.12); }
+  .diff { position: relative; height: 10px; background: #f5f5f4; border-radius: 999px; min-width: 88px; }
+  .diff i { position: absolute; top: 0; height: 100%; background: var(--accent); border-radius: 999px; }
+  .diff s { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #a8a29e; }
+  @media (max-width: 640px) {
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>STI book with a capped yield tree</h1>
+  <p class="lede">The portfolio is a Straits Times basket. Two monthly questions pick a factor mix. The mix only nudges weights, and each nudge is capped.</p>
+
+  <h2>How the STI weight is computed</h2>
+  <p>The published Straits Times Index holds about 30 companies. A company's index weight is its price times its free-float shares. The index level is that total divided by a divisor, so the level does not jump when the share count changes.</p>
+  <p>This page uses the 30 names in the Straits Times Index as of October 2026. The same 30 are used at every past review. The share count is today's market value divided by the latest price. On a review close, weight equals that day's price times the share count, and the 30 weights are scaled to 100 percent.</p>
+  <p>The basket is reset on the last trading day on or before the third Friday of March and of September. Between those reviews the weights move with prices. A new listing or a large corporate action can change the published STI between reviews. This basket waits for the next March or September date.</p>
+
+  <h2>The two questions</h2>
+  <p>Each month answers two questions. A review uses the previous month's answers, then keeps that mix until the next review.</p>
+  <div class="cards">
+    <div class="card"><span>Question 1. Government yield</span><b>10-year SGS</b><span>The MAS benchmark yield for the 10-year Singapore government bond. Above the median of earlier months means high. Below it means low. The median uses up to 120 earlier months, and at least 36.</span></div>
+    <div class="card"><span>Question 2. Credit</span><b>High yield minus investment grade</b><span>High yield is iShares USD Asia High Yield (O9P). Investment grade is Amova SGD Investment Grade (MBH), formerly Nikko. Each fund's yield is the dividends it paid over the last 365 days, divided by its price. Tiger supplies both price histories, from December 2019.</span></div>
+  </div>
+  <p>Credit is the high-yield fund's yield minus the investment-grade fund's yield. A larger gap means the riskier bonds pay more extra yield. That month is wide. A smaller gap is tight. Wide and tight use the same median rule as the 10-year yield.</p>
+  <h2>The tree</h2>
+  <p>Start at the top. The first branch is the 10-year yield. Each of those branches then splits on credit. The blue path is the leaf on the selected close, and the mix under that leaf is the one chosen on Singapore.</p>
+  <div class="tree-wrap"><div id="tree-key"></div></div>
+  <p class="note" id="tree-note"></p>
+
+  <h2>Features</h2>
+  <p>A missing sector score counts as zero. The leaf chooses the four weights in the score. A stock is compared with the other stocks in its own sector, not with the whole market.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Feature</th><th>What it measures</th><th>Formula</th></tr></thead>
+    <tbody>
+      <tr><td>Value</td><td>How cheap the stock is. The book figure waits 40 days after the quarter-end, then is carried forward.</td><td class="formula">Book per share / Price</td></tr>
+      <tr><td>Dividend</td><td>The last cash dividend, carried forward after its payment date. One payment, not a full-year yield.</td><td class="formula">Last dividend / Price</td></tr>
+      <tr><td>Low volatility</td><td>How calm the recent price has been. A calmer stock scores higher.</td><td class="formula">1 / σ of the last 30 daily returns</td></tr>
+      <tr><td>Momentum</td><td>How often the stock closed up recently. It is a count of up days, not a twelve-month return.</td><td class="formula">Number of positive returns in the last 45 sessions</td></tr>
+      <tr><td>Sector score</td><td>The stock versus the other names in its sector, for one feature.</td><td class="formula">z = (feature − sector mean) / sector standard deviation</td></tr>
+      <tr><td>Score</td><td>The leaf’s mix of those four sector scores. Weights are momentum, value, dividend, low volatility.</td><td class="formula">w<sub>m</sub> z<sub>m</sub> + w<sub>v</sub> z<sub>v</sub> + w<sub>d</sub> z<sub>d</sub> + w<sub>lv</sub> z<sub>lv</sub></td></tr>
+      <tr><td>10-year yield</td><td>The MAS 10-year Singapore government yield. Above the median of earlier months is high.</td><td class="formula">High if yield &gt; median of up to 120 earlier months</td></tr>
+      <tr><td>Bond-fund yield</td><td>Income from the high-yield fund, or from the investment-grade fund. Tiger prices, dividends over a trailing year.</td><td class="formula">Dividends over the last 365 days / Price</td></tr>
+      <tr><td>Credit</td><td>How much extra yield the riskier bonds pay. Above its own median is wide.</td><td class="formula">High-yield fund yield − investment-grade fund yield</td></tr>
+      <tr><td>STI weight</td><td>The company’s share of the basket. Shares are today’s market value divided by the latest price.</td><td class="formula">Price × shares / Σ (price × shares)</td></tr>
+      <tr><td>Active weight</td><td>Extra weight for a stock whose score is above the index-weighted average score. Capped at 1 percentage point, and funded by trimming the other names.</td><td class="formula">scale × index weight × max(score − average, 0)</td></tr>
+      <tr><td>Predicted tracking error</td><td>How large the yearly gap versus the index is expected to be. Scale is cut until this is inside 1.25%.</td><td class="formula">√(a′ Σ a) × √252</td></tr>
+      <tr><td>Information ratio</td><td>The gap versus the index, divided by how unsteady that gap is. Each leaf keeps the mix with the highest ratio on its own sessions.</td><td class="formula">mean(book − index) / σ(book − index) × √252</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">σ is the standard deviation. Σ is the covariance of the last 252 daily returns known on the review close. a is the column of active weights. The review uses the previous month’s yield answers.</p>
+
+  <h2>From the leaf to the book</h2>
+  <p>The hurdle is the index-weighted average score. A stock above the hurdle receives the active weight in the table. Stocks at or below the hurdle are trimmed so those extras are fully funded. After the review, prices can carry a weight a little past the 1 point cap. The book then waits for the next March or September review.</p>
+
+  <h2>Performance</h2>
+  <div class="stats" id="stats"></div>
+  <p class="note">Growth of 100 starts on the first review close in the file. The STI line is this 22-name proxy. The published index and ES3 are separate series.</p>
+
+  <h2>Year by year</h2>
+  <p class="note">Click a year to move the chart to that year's last close. 2021 starts at the first review. 2026 runs through the latest close.</p>
+  <div class="scroll"><table id="years"></table></div>
+
+  <h2>Growth of 100</h2>
+  <p class="note">Blue is the book. Grey is the STI proxy. Click a point to see that close: the leaf, both baskets, and the weight difference. Ticks along the baseline are review dates.</p>
+  <div class="tools">
+    <button id="prev" type="button">Previous day</button>
+    <button id="next" type="button">Next day</button>
+  </div>
+  <svg id="chart" class="chart" viewBox="0 0 720 280" role="img" aria-label="Daily growth of 100 for the book and the STI proxy"></svg>
+  <p class="note">The lower line is the book minus the STI proxy, in points of growth. Click either chart.</p>
+  <svg id="gap" class="chart" viewBox="0 0 720 160" role="img" aria-label="Book minus the STI proxy"></svg>
+
+  <h2 id="day-title"></h2>
+  <p id="day-copy"></p>
+  <div class="cards" id="questions"></div>
+  <div class="tree-wrap"><div id="leafs"></div></div>
+  <div class="scroll"><table id="holds"></table></div>
+  <p class="note">Index weight is that close's price times today's share count. Book weight is the index weight plus the capped nudge, then drifted by prices since the last review. Difference is book minus index.</p>
+</main>
+<script>
+const DATA = /*@@DATA@@*/null;
+const svgNS = "http://www.w3.org/2000/svg";
+
+function el(name, attrs, parent) {
+  const node = document.createElementNS(svgNS, name);
+  Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+  parent.appendChild(node);
+  return node;
+}
+
+function signed(value, digits) {
+  const text = (value * 100).toFixed(digits);
+  return (value > 0 ? "+" : "") + text + "%";
+}
+
+function points(value) {
+  const text = value.toFixed(1);
+  return (value > 0 ? "+" : "") + text;
+}
+
+let pick = DATA.dates.length - 1;
+
+function renderStats() {
+  const box = document.getElementById("stats");
+  const rows = [
+    [signed(DATA.summary.book, 1), "Book, " + DATA.dates[0] + " to " + DATA.dates[DATA.dates.length - 1]],
+    [signed(DATA.summary.sti, 1), "STI proxy, same sessions"],
+    [signed(DATA.summary.excess, 1), "Difference in total return"],
+    [(DATA.summary.te * 100).toFixed(2) + "%", "Realized tracking error"],
+    [DATA.summary.ir.toFixed(2), "Information ratio"]
+  ];
+  rows.forEach(([value, label]) => {
+    const cell = document.createElement("div");
+    cell.className = "stat";
+    cell.innerHTML = "<b></b><span></span>";
+    cell.querySelector("b").textContent = value;
+    cell.querySelector("span").textContent = label;
+    box.appendChild(cell);
+  });
+}
+
+function renderYears() {
+  const table = document.getElementById("years");
+  table.innerHTML = "<thead><tr><th>Year</th><th class='num'>Book</th><th class='num'>STI proxy</th><th class='num'>Difference</th><th class='num'>Tracking error</th></tr></thead>";
+  const body = document.createElement("tbody");
+  DATA.years.forEach((year) => {
+    const tr = document.createElement("tr");
+    tr.className = "click";
+    tr.innerHTML = "<td>" + year.year + "</td><td class='num'>" + signed(year.book, 1) + "</td><td class='num'>" + signed(year.sti, 1) + "</td><td class='num'>" + signed(year.excess, 1) + "</td><td class='num'>" + (year.te * 100).toFixed(2) + "%</td>";
+    tr.onclick = () => {
+      const stamp = String(year.year);
+      for (let index = DATA.dates.length - 1; index >= 0; index -= 1) {
+        if (DATA.dates[index].slice(0, 4) === stamp) { pick = index; break; }
+      }
+      renderDay();
+      document.getElementById("chart").scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+}
+
+function questions(fact, leafId) {
+  const box = document.getElementById("questions");
+  box.replaceChildren();
+  if (!fact) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = "<span>Tree</span><b>Not ready yet</b><span></span>";
+    card.children[2].textContent = "The bond funds need 36 months of yield before the median can be computed. Until then the mix is " + DATA.waiting.words + ", the mix with the highest information ratio on these early sessions.";
+    box.appendChild(card);
+    return;
+  }
+  const yieldWord = fact.high ? "High" : "Low";
+  const creditWord = fact.wide ? "Wide" : "Tight";
+  const cards = [
+    ["10-year SGS", fact.y10.toFixed(2) + "%", yieldWord + ". Median of earlier months " + fact.yMed.toFixed(2) + "%."],
+    ["High-yield fund", fact.hy.toFixed(2) + "%", "iShares USD Asia High Yield. Dividends over the last 365 days, divided by price."],
+    ["Investment-grade fund", fact.ig.toFixed(2) + "%", "Amova SGD Investment Grade. Same dividend yield."],
+    ["Credit gap", fact.spread.toFixed(2) + " pp", creditWord + ". High yield minus investment grade. Median of earlier gaps " + fact.sMed.toFixed(2) + " pp."]
+  ];
+  cards.forEach(([label, value, detail]) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = "<span></span><b></b><span></span>";
+    card.children[0].textContent = label;
+    card.children[1].textContent = value;
+    card.children[2].textContent = detail;
+    box.appendChild(card);
+  });
+}
+
+function mixById(id) {
+  return DATA.mixes.find((item) => item.id === id);
+}
+
+function leafBox(id, title, fact) {
+  const mix = mixById(id);
+  const on = id === arguments[3];
+  const words = mix && mix.days ? mix.words : "No months in this file";
+  const extra = on && fact ? "Gap " + fact.spread.toFixed(2) + " pp. " + words : words;
+  return "<li" + (on ? " class='on'" : "") + "><div class='box'><b>" + title + "</b><span>" + extra + "</span></div></li>";
+}
+
+function drawTree(parent, leafId, fact) {
+  const low = leafId === 0 || leafId === 1;
+  const high = leafId === 2 || leafId === 3;
+  const yieldText = fact
+    ? fact.y10.toFixed(2) + "% against a median of " + fact.yMed.toFixed(2) + "%"
+    : "Above the median of earlier months?";
+  parent.className = "dtree" + (leafId >= 0 ? " has-path" : "");
+  parent.innerHTML =
+    "<ul><li class='" + (leafId >= 0 ? "on" : "") + "'>" +
+    "<div class='box'><b>10-year yield</b><span>" + yieldText + "</span></div><ul>" +
+    "<li class='" + (low ? "on" : "") + "'><div class='box'><b>Low</b></div><ul>" +
+    leafBox(0, "Tight credit", fact, leafId) + leafBox(1, "Wide credit", fact, leafId) +
+    "</ul></li>" +
+    "<li class='" + (high ? "on" : "") + "'><div class='box'><b>High</b></div><ul>" +
+    leafBox(2, "Tight credit", fact, leafId) + leafBox(3, "Wide credit", fact, leafId) +
+    "</ul></li></ul></li></ul>";
+}
+
+function renderDay() {
+  const leafId = DATA.leaf[pick];
+  const fact = DATA.facts[DATA.month[pick]] || null;
+  const leaf = leafId >= 0 ? DATA.mixes.find((item) => item.id === leafId) : null;
+  document.getElementById("day-title").textContent = DATA.dates[pick];
+  const book = DATA.book[pick];
+  const sti = DATA.sti[pick];
+  let review = "The first review has not happened yet.";
+  DATA.reviews.forEach((row) => {
+    if (row.date <= DATA.dates[pick]) review = row;
+  });
+  const reviewText = typeof review === "string"
+    ? review
+    : "Last review " + review.date + ". Predicted tracking error " + (review.te * 100).toFixed(2) + "%.";
+  const mixText = leaf
+    ? leaf.name + ". Mix " + leaf.mix + ", written momentum / value / dividend / low volatility."
+    : "The yield tree is not ready, so the mix is " + DATA.waiting.mix + ".";
+  document.getElementById("day-copy").textContent =
+    "Growth of 100: book " + book.toFixed(1) + ", STI proxy " + sti.toFixed(1) + ", difference " + points(book - sti) + ". " + mixText + " " + reviewText;
+  questions(fact, leafId);
+  drawTree(document.getElementById("leafs"), leafId, fact);
+  drawTree(document.getElementById("tree-key"), leafId, fact);
+  const table = document.getElementById("holds");
+  table.innerHTML = "<thead><tr><th>Name</th><th class='num'>STI weight</th><th class='num'>Book weight</th><th class='num'>Difference</th><th>Difference</th></tr></thead>";
+  const body = document.createElement("tbody");
+  const rows = DATA.names.map((name, index) => ({
+    name,
+    sti: DATA.stiW[pick][index],
+    book: DATA.bookW[pick][index]
+  })).filter((row) => row.sti > 0 || row.book > 0);
+  rows.sort((a, b) => b.sti - a.sti);
+  const maxDiff = Math.max(100, ...rows.map((row) => Math.abs(row.book - row.sti)));
+  rows.forEach((row) => {
+    const diff = row.book - row.sti;
+    const tr = document.createElement("tr");
+    const width = Math.abs(diff) / maxDiff * 50;
+    const left = diff >= 0 ? 50 : 50 - width;
+    tr.innerHTML = "<td></td><td class='num'></td><td class='num'></td><td class='num'></td><td><div class='diff'><s></s><i></i></div></td>";
+    tr.children[0].textContent = row.name;
+    tr.children[1].textContent = (row.sti / 100).toFixed(2) + "%";
+    tr.children[2].textContent = (row.book / 100).toFixed(2) + "%";
+    tr.children[3].textContent = (diff / 100).toFixed(2) + " pp";
+    const bar = tr.querySelector("i");
+    bar.style.left = left + "%";
+    bar.style.width = width + "%";
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  document.getElementById("prev").disabled = pick === 0;
+  document.getElementById("next").disabled = pick === DATA.dates.length - 1;
+  document.querySelectorAll("#years tbody tr").forEach((row) => {
+    row.classList.toggle("on", row.firstChild.textContent === DATA.dates[pick].slice(0, 4));
+  });
+  drawChart();
+  drawGap();
+}
+
+function drawChart() {
+  const svg = document.getElementById("chart");
+  svg.replaceChildren();
+  const width = 720, height = 280, left = 44, right = 12, top = 28, bottom = 28;
+  const lo = Math.min(...DATA.book, ...DATA.sti) - 2;
+  const hi = Math.max(...DATA.book, ...DATA.sti) + 2;
+  const xOf = (index) => left + (index / (DATA.dates.length - 1)) * (width - left - right);
+  const yOf = (value) => top + (1 - (value - lo) / (hi - lo)) * (height - top - bottom);
+  const pathOf = (series) => series.map((value, index) => (index === 0 ? "M" : "L") + xOf(index).toFixed(1) + "," + yOf(value).toFixed(1)).join(" ");
+  el("text", { x: left, y: 16, fill: "#1d4e89", "font-size": 12, "font-family": "system-ui, sans-serif" }, svg).textContent = "Book";
+  el("text", { x: left + 42, y: 16, fill: "#57534e", "font-size": 12, "font-family": "system-ui, sans-serif" }, svg).textContent = "STI proxy";
+  const step = (hi - lo) > 80 ? 20 : 10;
+  for (let tick = Math.ceil(lo / step) * step; tick <= hi; tick += step) {
+    el("line", { x1: left, x2: width - right, y1: yOf(tick), y2: yOf(tick), stroke: "#e7e5e4" }, svg);
+    el("text", { x: left - 6, y: yOf(tick) + 3, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = String(tick);
+  }
+  el("path", { d: pathOf(DATA.sti), fill: "none", stroke: "#57534e", "stroke-width": 1.5 }, svg);
+  el("path", { d: pathOf(DATA.book), fill: "none", stroke: "#1d4e89", "stroke-width": 1.75 }, svg);
+  DATA.reviews.forEach((row) => {
+    const index = DATA.dates.indexOf(row.date);
+    if (index >= 0) el("line", { x1: xOf(index), x2: xOf(index), y1: height - bottom, y2: height - bottom + 6, stroke: "#a8a29e" }, svg);
+  });
+  el("line", { x1: xOf(pick), x2: xOf(pick), y1: top, y2: height - bottom, stroke: "#1d4e89", "stroke-dasharray": "3 3" }, svg);
+  el("circle", { cx: xOf(pick), cy: yOf(DATA.book[pick]), r: 3.5, fill: "#1d4e89" }, svg);
+  el("circle", { cx: xOf(pick), cy: yOf(DATA.sti[pick]), r: 3.5, fill: "#57534e" }, svg);
+  el("text", { x: left, y: height - 8, fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.dates[0];
+  el("text", { x: width - right, y: height - 8, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = DATA.dates[DATA.dates.length - 1];
+  svg.onclick = (event) => {
+    const rect = svg.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    let best = 0;
+    let distance = Infinity;
+    for (let index = 0; index < DATA.dates.length; index += 1) {
+      const gap = Math.abs(xOf(index) - x);
+      if (gap < distance) { distance = gap; best = index; }
+    }
+    pick = best;
+    renderDay();
+  };
+}
+
+function drawGap() {
+  const svg = document.getElementById("gap");
+  svg.replaceChildren();
+  const width = 720, height = 160, left = 44, right = 12, top = 16, bottom = 24;
+  const values = DATA.book.map((value, index) => value - DATA.sti[index]);
+  const lo = Math.min(...values, 0) - 0.2;
+  const hi = Math.max(...values, 0) + 0.2;
+  const xOf = (index) => left + (index / (DATA.dates.length - 1)) * (width - left - right);
+  const yOf = (value) => top + (1 - (value - lo) / (hi - lo)) * (height - top - bottom);
+  el("line", { x1: left, x2: width - right, y1: yOf(0), y2: yOf(0), stroke: "#e7e5e4" }, svg);
+  [Math.min(...values), 0, Math.max(...values)].forEach((tick) => {
+    el("text", { x: left - 6, y: yOf(tick) + 3, "text-anchor": "end", fill: "#57534e", "font-size": 10, "font-family": "system-ui, sans-serif" }, svg).textContent = tick.toFixed(1);
+  });
+  const path = values.map((value, index) => (index === 0 ? "M" : "L") + xOf(index).toFixed(1) + "," + yOf(value).toFixed(1)).join(" ");
+  el("path", { d: path, fill: "none", stroke: "#1d4e89", "stroke-width": 1.5 }, svg);
+  el("line", { x1: xOf(pick), x2: xOf(pick), y1: top, y2: height - bottom, stroke: "#1d4e89", "stroke-dasharray": "3 3" }, svg);
+  el("circle", { cx: xOf(pick), cy: yOf(values[pick]), r: 3.5, fill: "#1d4e89" }, svg);
+  svg.onclick = (event) => {
+    const rect = svg.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * width;
+    let best = 0;
+    let distance = Infinity;
+    for (let index = 0; index < DATA.dates.length; index += 1) {
+      const gap = Math.abs(xOf(index) - x);
+      if (gap < distance) { distance = gap; best = index; }
+    }
+    pick = best;
+    renderDay();
+  };
+}
+
+document.getElementById("prev").onclick = () => { if (pick > 0) { pick -= 1; renderDay(); } };
+document.getElementById("next").onclick = () => { if (pick < DATA.dates.length - 1) { pick += 1; renderDay(); } };
+document.getElementById("tree-note").textContent = "Each mix is the 10-point grid point with the highest information ratio of this capped book against the STI proxy, measured on that state's own sessions. Those same sessions are in the chart. Before the median exists, a separate mix is chosen on those early sessions.";
+renderStats();
+renderYears();
+renderDay();
+</script>
+</body>
+</html>

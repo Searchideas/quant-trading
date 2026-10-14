@@ -1,0 +1,6 @@
+high_yield,wide_credit,name,information_ratio,days,momentum,value,low_volatility,dividend
+False,False,"Low 10-year, tight credit",0.46310081782005347,481,1.0,0.0,0.0,0.0
+False,True,"Low 10-year, wide credit",,0,0.0,0.0,0.0,0.0
+True,False,"High 10-year, tight credit",-0.47564402028192077,214,0.0,0.0,1.0,0.0
+True,True,"High 10-year, wide credit",3.382773816983348,22,0.0,0.0,0.0,1.0
+,,Before the yield history is long enough,0.421225748813211,603,0.0,0.4,0.6,0.0
