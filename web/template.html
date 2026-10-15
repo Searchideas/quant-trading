@@ -79,7 +79,7 @@
     <p>Inside each sector the two highest scores are kept. A sector's weight is its share of market cap among the sectors that produced a pick, and the two names split that weight by their own market caps. The book does not trade because a weight has drifted. It trades when the set of names changes. The weighting function can cap a sector at 35 percent. This test passes 100 percent, so that cap does not operate. A large sector can be a large part of the book, and the larger of its two names can be one large position. That is a construction choice. There is no separate risk model.</p>
     <h2>Why the weights change</h2>
     <p>Once a month, two questions are asked. Is GS10 above the median of its own previous 120 months? Is the BAA minus AAA spread above the median of its own previous 120 months? The return month uses the previous month's answers, so the label for March is known at the end of February. Four leaves follow. Nothing is trained on individual stocks. The stock scores still move every session. Only the mix waits for the leaf to change.</p>
-    <p>On the days each leaf was in force, the search kept the mix with the highest Sharpe of that leaf's own daily gross returns. Gross means before trading cost. Sharpe is the mean of those daily returns divided by their standard deviation, annualized with the square root of 252. On the low-yield, tight-credit leaf, more than one split between value and dividend shared that best Sharpe when momentum and low volatility were both zero. The mix shown is 100 percent dividend because that mix was reached first, not because it beat the ties. The last yield month in the file is September 2026. Its leaf is high 10-year yield and tight credit, and the mix is 0 / 60 / 30 / 10. Later sessions keep that leaf until the next yield month is in the file. A separate rule, which could move only value and dividend by 10 points and had to freeze the mapping before 2017, finished next to a fixed 0 / 60 / 30 / 10 book. The path on this page uses mixes chosen on these same years. It is a description of the test, not a track record.</p>
+    <p>On the days each leaf was in force from January 2017 through December 2022, the search kept the mix with the highest Sharpe of that leaf's own daily gross returns. Gross means before trading cost. Sharpe is the mean of those daily returns divided by their standard deviation, annualized with the square root of 252. When two mixes share that Sharpe, the one reached first is kept. From January 2023 those four mixes stay fixed. A later session still takes its leaf from the previous month's yield and credit spread, and the stock scores still move, but the mix for a leaf is not searched again. A scheduled run adds that session to the saved path. It does not rebuild the earlier days. The 2017–2022 stretch is the fit. From 2023 the same tree is applied to new sessions. This page is a description of that test, not a track record.</p>
     <h2>What the result is compared with</h2>
     <p>The comparison is SPY, the S&amp;P 500 ETF, on the same sessions. Its line uses the adjusted close, so dividends are in the price. SPY is not charged the stock-trading schedule. It is the large-cap US market, not a value portfolio and not a low-volatility portfolio. A gap against it can come from holding today's survivors, from sizing sectors at today's market caps, or from the factor mix.</p>
     <h2>When the trade happens, and at what price</h2>
@@ -93,11 +93,11 @@
       <div class="stat"><b id="stat-cost"></b><span>Trading cost on the $100,000 account</span></div>
     </div>
     <h2>Full path against the S&amp;P 500</h2>
-    <p class="note">CAGR is the compounded annual rate from the first close to the latest close, using the count of daily returns divided by 252. Sharpe is the mean daily return divided by its standard deviation, times the square root of 252. Sortino uses the same mean and the same annualization, and divides by the downside deviation: the square root of the mean squared return on days below zero, with up days counted as zero. Maximum drawdown is the deepest peak-to-trough on the equity path. Calmar is CAGR divided by the absolute maximum drawdown. The book is after the Tiger cost schedule. SPY is not. These mixes were chosen on the same history.</p>
+    <p class="note">CAGR is the compounded annual rate from the first close to the latest close, using the count of daily returns divided by 252. Sharpe is the mean daily return divided by its standard deviation, times the square root of 252. Sortino uses the same mean and the same annualization, and divides by the downside deviation: the square root of the mean squared return on days below zero, with up days counted as zero. Maximum drawdown is the deepest peak-to-trough on the equity path. Calmar is CAGR divided by the absolute maximum drawdown. The book is after the Tiger cost schedule. SPY is not. The mixes were chosen on 2017 through 2022. From 2023 the saved path is extended one session at a time.</p>
     <div class="scroll"><table id="scorecard"></table></div>
     <p class="note" id="months-ahead"></p>
     <h2>Market model</h2>
-    <p class="note">Each daily book return is alpha plus beta times that day's S&amp;P 500 return, plus a remainder. Alpha per year is the daily alpha times 252. The standard error and the t-statistic say how uncertain that alpha is. The 95% range is 1.96 standard errors on either side. A range that crosses zero means the alpha is not distinguishable from noise. Unexplained volatility is the annualized size of the remainder. The information ratio is alpha per year divided by that volatility. The book return is after the Tiger cost schedule. These mixes were chosen on the same history.</p>
+    <p class="note">Each daily book return is alpha plus beta times that day's S&amp;P 500 return, plus a remainder. Alpha per year is the daily alpha times 252. The standard error and the t-statistic say how uncertain that alpha is. The 95% range is 1.96 standard errors on either side. A range that crosses zero means the alpha is not distinguishable from noise. Unexplained volatility is the annualized size of the remainder. The information ratio is alpha per year divided by that volatility. The book return is after the Tiger cost schedule. The mixes were chosen on 2017 through 2022. From 2023 the saved path is extended one session at a time.</p>
     <div class="scroll"><table id="market"></table></div>
     <h2>Time regions</h2>
     <p class="note">Each block is one leaf, from the prior month-end to this period's month-end. A red block lagged SPY. The mix is momentum / value / dividend / low volatility. The line below is every session.</p>
@@ -136,7 +136,7 @@ const LEAF_NAME = [
   "High 10-year, tight credit",
   "High 10-year, wide credit"
 ];
-const MIX = ["0 / 0 / 100 / 0", "0 / 0 / 70 / 30", "0 / 60 / 30 / 10", "0 / 100 / 0 / 0"];
+const MIX = DATA.mixes;
 const svgNS = "http://www.w3.org/2000/svg";
 
 function el(name, attrs, parent) {
@@ -311,7 +311,7 @@ function init() {
   document.getElementById("tab-performance").onclick = () => show("performance");
   spark("cost-chart", DATA.mcost, "$");
   spark("rebal-chart", DATA.mrebal, "");
-  document.getElementById("foot").textContent = "Page built " + DATA.built + ". Latest close in the file is " + DATA.dates[DATA.dates.length - 1] + ". A scheduled rebuild publishes the next session after the US close. The mixes were chosen on this same history.";
+  document.getElementById("foot").textContent = "Page built " + DATA.built + ". Latest close in the file is " + DATA.dates[DATA.dates.length - 1] + ". A scheduled run adds the next session and leaves the saved days in place. The mixes were chosen on 2017 through 2022.";
   renderDay();
 }
 init();

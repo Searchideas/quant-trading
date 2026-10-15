@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -27,10 +27,18 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: pip install -r requirements.txt
-      - name: Refresh prices and factors
-        run: python main.py --market us
-      - name: Build the page
+      - name: Add the latest session
         run: python web/build_page.py
+      - name: Keep the added session
+        continue-on-error: true
+        run: |
+          git add data/us/processed/page_store web/public/index.html
+          if git diff --cached --quiet; then
+            echo "No new session."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Add the latest session to the saved book."
+          git push
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/public

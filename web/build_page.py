@@ -1,12 +1,15 @@
-"""Build the public book page from the frozen leaf mixes.
+"""Build the public book page.
 
-The mixes are not searched again. A later day uses whichever leaf last
-month's 10-year yield and credit spread select. Live weights, config.py,
-and the brokerage account are not touched.
+The four mixes are chosen once, on each leaf's own days from 2017 through
+2022. From 2023 those mixes stay fixed. A later run appends the new session
+onto the saved path and does not replace a saved day. A full rebuild happens
+only with --rebuild, or when the saved path is missing. Live weights,
+config.py, and the brokerage account are not touched.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import warnings
@@ -19,19 +22,42 @@ if str(ROOT) not in sys.path:
 import numpy as np
 import pandas as pd
 
-from analytics.four_leaf_search import leaf_keys
+from analytics.four_leaf_search import ORDER, leaf_keys
+from analytics.four_leaf_sharpe import best_sharpe
+from analytics.leaf_weight_search import factor_matrix, grid, gross_returns, score_frame, stitch_scores
 from analytics.performance import market_regression
-from analytics.leaf_weight_search import factor_matrix, stitch_scores
 from analytics.regime_backtest import load_states_from_pages
 from analytics.yield_regime import assign_leaves, load_states
 from backtest.engine import BacktestEngine
+from factors.dividend import DividendFactor
+from factors.io import load_book_data, load_dividend_data
+from factors.momentum import MomentumFactor
+from factors.value import ValueFactor
+from factors.volatility import VolatilityFactor
+from factors import sector_mean
 from strategy.benchmark import Benchmark
 from strategy.factor_strategy import (
-    load_strategy_data,
-    normalize_factors,
     hide_unlisted,
     listed_span,
+    load_strategy_data,
+    normalize_factors,
     select_sector_best_weights,
+)
+from web.page_archive import (
+    TRAIN_END,
+    TRAIN_START,
+    day_weights,
+    extend_records,
+    holdings_text,
+    leaf_text,
+    load_categories,
+    load_history,
+    load_mixes,
+    load_prices,
+    load_weights,
+    ready,
+    save_run,
+    sector_caps,
 )
 
 CHOSEN = {
@@ -292,32 +318,49 @@ def _spell(start, end, key, book0, spy0, equity, spy, months: int) -> dict:
     }
 
 
-def main() -> None:
-    warnings.filterwarnings("ignore")
-    leaves = assign_leaves(load_yield_states())
-    data = load_strategy_data("us")
-    normalized, tickers = normalize_factors(
-        data["factors_combined"],
-        data["categorizations"],
-        data["sector_value"],
-        data["sector_dividend"],
-        data["sector_momentum"],
-        data["sector_volatility"],
-        data["sector_growth"],
-        data["sector_quality"],
-    )
-    parts = {
-        name: factor_matrix(normalized, tickers, name)
-        for name in ("momentum", "value", "volatility", "dividend")
-    }
-    keys = list(leaf_keys(normalized.index, leaves))
+def filled_keys(index, leaves) -> list:
+    keys = list(leaf_keys(index, leaves))
     last_key = (True, False)
     for i, key in enumerate(keys):
         if key is None:
             keys[i] = last_key
         else:
             last_key = key
-    score = stitch_scores(parts, normalized.index, tickers, keys, CHOSEN)
+    return keys
+
+
+def choose_train_mixes(parts, prices, categories, caps, index, tickers, keys) -> dict:
+    """Highest Sharpe on each leaf, using only 2017 through 2022."""
+    mixes = grid(step=10)
+    window = index[(index >= TRAIN_START) & (index < TRAIN_END)]
+    positions = index.get_indexer(window)
+    daily = prices.reindex(index=window, columns=tickers).pct_change(fill_method=None).fillna(0.0)
+    library = np.zeros((len(mixes), len(window)))
+    window_parts = {name: values[positions] for name, values in parts.items()}
+    window_keys = [keys[int(pos)] for pos in positions]
+    for i, mix in enumerate(mixes):
+        frame = score_frame(window_parts, mix, window, tickers)
+        book = select_sector_best_weights(
+            frame, categories, caps, max_sector_weight=1.0, top_n_per_sector=2
+        )
+        library[i] = gross_returns(daily, book)
+        if (i + 1) % 40 == 0 or i + 1 == len(mixes):
+            print(f"train mix {i + 1}/{len(mixes)}")
+    chosen = {}
+    for key in ORDER:
+        mask = np.array([item == key for item in window_keys], dtype=bool)
+        mix, sharpe = best_sharpe(mixes, library, mask)
+        chosen[key] = mix
+        print(LEAF_NAME[key], mix_text(mix), f"Sharpe {sharpe:.2f}")
+    return chosen
+
+
+def simulate(data, normalized, tickers, keys, mixes):
+    parts = {
+        name: factor_matrix(normalized, tickers, name)
+        for name in ("momentum", "value", "volatility", "dividend")
+    }
+    score = stitch_scores(parts, normalized.index, tickers, keys, mixes)
     prices = data["price_data"].reindex(index=score.index, columns=score.columns)
     score = hide_unlisted(score, prices)
     book = select_sector_best_weights(
@@ -333,33 +376,105 @@ def main() -> None:
         raise SystemExit("The book holds a name before it lists or after it is gone.")
     result = BacktestEngine(prices, book, initial_capital=100_000.0).run()
     equity = result["equity"]
-    equity = equity[equity.index >= "2017-01-01"]
-    spy = (
-        Benchmark(
-            "SPY",
-            start_date="2016-01-01",
-            end_date=(equity.index[-1] + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
-            initial_capital=100_000.0,
-        )
-        .equity.reindex(equity.index)
-        .ffill()
+    equity = equity[equity.index >= TRAIN_START]
+    bench = Benchmark(
+        "SPY",
+        start_date="2016-01-01",
+        end_date=(equity.index[-1] + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+        initial_capital=100_000.0,
     )
-    if spy.isna().any():
+    spy = bench.equity.reindex(equity.index).ffill()
+    spy_close = bench.prices.reindex(equity.index).ffill()
+    if spy.isna().any() or spy_close.isna().any():
         raise SystemExit(f"SPY missing on {int(spy.isna().sum())} sessions")
-    costs = result.loc[equity.index, "cost_sgd"]
-    turnover = result.loc[equity.index, "turnover"]
+    history = pd.DataFrame(index=equity.index)
+    history["book"] = equity
+    history["spy"] = spy
+    history["spy_close"] = spy_close
+    history["cost"] = result.loc[equity.index, "cost_sgd"]
+    history["turnover"] = result.loc[equity.index, "turnover"]
+    history["leaf"] = [leaf_text(keys[normalized.index.get_loc(day)]) for day in equity.index]
     weights = book.reindex(equity.index).fillna(0.0)
+    history["holdings"] = [holdings_text(weights.loc[day]) for day in equity.index]
+    return history, weights, prices.reindex(equity.index)
+
+
+def propose_new_book(prices, categories, mixes, leaves, new_days):
+    """Scores for the new sessions only. Does not write factor files."""
+    value_df = ValueFactor(prices, load_book_data("us")).calculate_value_factor()
+    dividend_df = DividendFactor(prices, load_dividend_data("us")).calculate_dividend_factor()
+    momentum_df = MomentumFactor(prices).calculate_momentum()
+    volatility_df = VolatilityFactor(prices).calculate_volatility()
+    combined = pd.concat(
+        [
+            dividend_df.add_suffix("_dividend"),
+            value_df.add_suffix("_value"),
+            momentum_df.add_suffix("_momentum"),
+            volatility_df.add_suffix("_volatility"),
+        ],
+        axis=1,
+    )
+    sector_frames = {}
+    for name, frame in (
+        ("value", value_df),
+        ("dividend", dividend_df),
+        ("momentum", momentum_df),
+        ("volatility", volatility_df),
+    ):
+        mean_df, std_df = sector_mean(frame, categories)
+        sector_frames[name] = pd.concat(
+            {f"{sector}_mean": mean_df[sector] for sector in mean_df.columns}
+            | {f"{sector}_std": std_df[sector] for sector in std_df.columns},
+            axis=1,
+        )
+    normalized, tickers = normalize_factors(
+        combined,
+        categories,
+        sector_frames["value"],
+        sector_frames["dividend"],
+        sector_frames["momentum"],
+        sector_frames["volatility"],
+    )
+    parts = {
+        name: factor_matrix(normalized, tickers, name)
+        for name in ("momentum", "value", "volatility", "dividend")
+    }
+    keys = filled_keys(normalized.index, leaves)
+    score = hide_unlisted(
+        stitch_scores(parts, normalized.index, tickers, keys, mixes),
+        prices.reindex(columns=tickers),
+    )
+    caps = sector_caps(categories)
+    rows = []
+    leaves_out = []
+    for day in new_days:
+        if day not in score.index:
+            rows.append(pd.Series(0.0, index=score.columns))
+            leaves_out.append("")
+            continue
+        loc = score.index.get_loc(day)
+        rows.append(day_weights(score.iloc[loc], categories, caps))
+        leaves_out.append(leaf_text(keys[loc]))
+    return pd.DataFrame(rows, index=new_days), pd.Series(leaves_out, index=new_days)
+
+
+def render(history: pd.DataFrame) -> None:
+    global CHOSEN
+    CHOSEN = load_mixes()
+    equity = history["book"].astype(float)
+    spy = history["spy"].astype(float)
+    costs = history["cost"].astype(float)
+    turnover = history["turnover"].astype(float)
+    day_keys = []
     base_book = float(equity.iloc[0])
     base_spy = float(spy.iloc[0])
-    day_keys = []
     dates, growth_book, growth_spy, cost_day = [], [], [], []
     traded, leaf_chars, hold_ids, books, seen = [], [], [], [], {}
     for day in equity.index:
-        key = keys[normalized.index.get_loc(day)]
+        high, wide = str(history.loc[day, "leaf"]).split(",")
+        key = (high == "1", wide == "1")
         day_keys.append(key)
-        row = weights.loc[day]
-        held = row[row > 0.001].sort_values(ascending=False)
-        text = "|".join(f"{ticker} {weight * 100:.1f}" for ticker, weight in held.items())
+        text = str(history.loc[day, "holdings"])
         if text not in seen:
             seen[text] = len(books)
             books.append(text)
@@ -400,6 +515,10 @@ def main() -> None:
         "scorecard": scorecard,
         "market": model,
         "monthsAhead": months_ahead,
+        "mixes": [
+            mix_text(CHOSEN[key])
+            for key in ((False, False), (False, True), (True, False), (True, True))
+        ],
         "statBook": pct(growth_book[-1] / growth_book[0] - 1.0),
         "statSpy": pct(growth_spy[-1] / growth_spy[0] - 1.0),
         "statCost": f"${float(costs.sum()):,.0f}",
@@ -420,6 +539,100 @@ def main() -> None:
     for row in scorecard:
         print(row["metric"], row["book"], row["spy"])
     print(months_ahead)
+
+
+def rebuild() -> None:
+    warnings.filterwarnings("ignore")
+    print("Rebuilding the saved path. Later runs append.")
+    leaves = assign_leaves(load_yield_states())
+    data = load_strategy_data("us")
+    normalized, tickers = normalize_factors(
+        data["factors_combined"],
+        data["categorizations"],
+        data["sector_value"],
+        data["sector_dividend"],
+        data["sector_momentum"],
+        data["sector_volatility"],
+        data["sector_growth"],
+        data["sector_quality"],
+    )
+    parts = {
+        name: factor_matrix(normalized, tickers, name)
+        for name in ("momentum", "value", "volatility", "dividend")
+    }
+    keys = filled_keys(normalized.index, leaves)
+    mixes = choose_train_mixes(
+        parts,
+        data["price_data"],
+        data["categorizations"],
+        data["sector_market_cap"],
+        normalized.index,
+        tickers,
+        keys,
+    )
+    history, weights, prices = simulate(data, normalized, tickers, keys, mixes)
+    save_run(history, weights, prices, data["categorizations"], mixes)
+    render(history)
+
+
+def extend() -> bool:
+    """Add sessions after the saved path. Returns True when a day was added."""
+    warnings.filterwarnings("ignore")
+    from download_data import download_yahoo_prices
+
+    history = load_history()
+    weights = load_weights()
+    prices = load_prices()
+    categories = load_categories()
+    mixes = load_mixes()
+    last = history.index[-1]
+    symbols = list(prices.columns)
+    fresh = download_yahoo_prices(symbols, last.strftime("%Y-%m-%d"))
+    if fresh is None or fresh.empty:
+        print(f"No new prices after {last.date()}.")
+        return False
+    fresh.index = pd.to_datetime(fresh.index)
+    if getattr(fresh.index, "tz", None) is not None:
+        fresh.index = fresh.index.tz_convert(None)
+    fresh.index = fresh.index.normalize()
+    added = fresh.index[fresh.index > last]
+    if len(added) == 0:
+        print(f"No new session after {last.date()}.")
+        return False
+    bench = Benchmark(
+        "SPY",
+        start_date=last.strftime("%Y-%m-%d"),
+        end_date=(added.max() + pd.Timedelta(days=1)).strftime("%Y-%m-%d"),
+        initial_capital=100_000.0,
+    )
+    combined = pd.concat([prices, fresh.reindex(columns=prices.columns).loc[added]])
+    combined = combined[~combined.index.duplicated(keep="first")].sort_index()
+    leaves = assign_leaves(load_yield_states())
+    new_weights, new_leaves = propose_new_book(combined, categories, mixes, leaves, added)
+    history, weights, prices = extend_records(
+        history, weights, prices, new_weights, fresh, bench.prices, new_leaves
+    )
+    save_run(history, weights, prices, categories, mixes)
+    render(history)
+    print(f"Added {len(added)} session(s) through {history.index[-1].date()}.")
+    return True
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Choose the 2017-2022 mixes again and replace the saved path.",
+    )
+    args = parser.parse_args()
+    if args.rebuild or not ready():
+        rebuild()
+        return
+    try:
+        extend()
+    except Exception as exc:
+        print(f"Could not add a session ({exc}). The saved path is unchanged.")
 
 
 if __name__ == "__main__":
